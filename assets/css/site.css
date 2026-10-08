@@ -1,0 +1,63 @@
+/* ==========================================================================
+   site.css — 南昌大学教务处学生学习服务中心 · 门户网站（唯一真源）
+   零外链 / 零构建 / 手机优先。被提交的文件就是被服务的文件。
+
+   分节顺序固定（实现方案 §2.8）：
+     :root → 重置 → 版式 → 布局 → 组件（§2.4 顺序）→ 页面专属 → 打印
+   媒体查询就近放置。CSS 特性基线锁 2019（禁用清单见 §2.9，由 check_site S14 断言）。
+
+   ---- class 登记表（封闭清单 = 附录 B；未登记的 class 由 check_site S19 报 WARN）----
+   骨架/页头/页脚：
+     wrap skip-link site-head head-inner brand brand-mark brand-text brand-name
+     brand-sub nav-toggle bars site-nav nav-list nav-scrim pagehead site-foot
+     foot-inner foot-brand foot-logo foot-nav foot-meta
+   首页：
+     hero hero-inner hero-text hero-lead hero-meta hero-actions hero-mascot
+     sec sec-more cards card num home-list oh-line empty
+   概况：  about-lead facts
+   服务：  svc svc-time svc-time-text svc-boy
+   公告：  notice notice-meta notice-body
+   活动：  activity activity-cover activity-meta gallery
+   团队：  team-grid member avatar role
+   通用：  chip tip table-scroll hint tbl timeline ph
+   状态类：nav-open（body，唯一由 JS 控制的类）
+   404 自包含样式类不登记在本表内：box emblem girl btn nav（§3.11，404 不引用本文件）
+   ========================================================================== */
+
+/* ===== 1. Token 层（冻结：与内部工具同名，改名即违反 S16） ===== */
+:root{
+  color-scheme: light;                 /* 红线：防安卓/微信"强制深色"整站反色（计划书 §3.6） */
+  /* —— 与内部工具同名（三端对照表见 §2.1） —— */
+  --accent:#2E5EA3;      /* 学服蓝：链接 / 主按钮 / 当前导航 / 区块标题 */
+  --accent-deep:#234A82; /* 学服蓝·深：按钮 hover / 页脚底 */
+  --accent-soft:#EAEFF7; /* 学服蓝·浅面：Hero 底 / 选中态 / 首字母圆片底 */
+  --flame:linear-gradient(180deg,#D92419,#DC8C0F,#E3C238);  /* 火焰渐变（竖用） */
+  --cream:#FEDF8D;       /* 奶黄：.ph 占位底 */
+  --cream-soft:#FFF6DD;  /* 奶黄·浅：重要提示块底 / 空状态底（E34） */
+  --ice:#DEEAF6;         /* 冰蓝：信息芯片底 */
+  --ink:#1F2329;         /* 墨：正文 */
+  --dim:#667085;         /* 灰：次要文字（门户修正值，白底 4.97:1；计划书修正 2） */
+  --line:#E3E6EA;        /* 线 */
+  --bg:#F6F7F9;          /* 底 */
+  --panel:#FFFFFF;       /* 面：卡片 / 页头 / 抽屉底 */
+  /* —— 语义色：门户无状态机，登记备用（E21）；404 自包含不引用本表 —— */
+  --ok:#1A7F37;  --warn:#B26A00;  --bad:#B42318;  --hot:#C2410C;
+  --ok-bg:#E8F5E9;  --bad-bg:#FDECEA;
+  /* —— 圆角：门户比内部工具大一档（计划书决策 D2） —— */
+  --r-card:12px;  --r-btn:8px;  --r-tag:6px;
+  /* —— 版式 —— */
+  --wrap:1080px;
+  --font:system-ui,-apple-system,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+}
+
+/* ===== 2. 全局重置与排版 ===== */
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;font:16px/1.75 var(--font);color:var(--ink);background:var(--bg);
+     overflow-wrap:break-word}                /* 防长串溢出造成横向滚动（R1 根因预防） */
+html,body{background:var(--bg)}               /* 防 iOS 橡皮筋露白 */
+img{max-width:100%;height:auto;display:block}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+h1,h2,h3{margin:0;line-height:1.35}
+p{margin:0 0 12px}
