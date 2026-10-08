@@ -54,6 +54,19 @@
 <!-- COMMON:NAV END -->
 <main id="main">
   <div class="pagehead"><div class="wrap"><h1>往期活动</h1></div></div>
+  <section class="sec"><div class="wrap">
+
+    <!-- 空状态：与活动卡互斥（施工期用这块）。M4 起按下面的步骤上活动卡：
+         ① 先交维护者把照片走管线入库（压缩、剥 EXIF 定位信号）：
+              python tools/make_images.py --photos "<源目录>" --slug <slug>
+            产出 assets/img/activities/cover-<slug>.jpg 与 <slug>-NN.jpg
+         ② 复制 notices.html 里 <article class="notice"> 的整体写法，换成 <article class="activity">；
+            width/height 一律照 assets/img/image-manifest.tsv 填（不要照抄示例值）。
+         ③ 卡片 id 用 act-YYYYMMDD-<slug>，其中 <slug> 必须与照片文件名里的 slug 一致（E16）。
+         ④ 同步更新 index.html 的「近期活动」卡片，再改页脚「最后更新」日期。
+         可复制的模板与逐步说明见《内容更新.md》。 -->
+    <p class="empty">活动记录整理中</p>
+  </div></section>
 </main>
 <!-- COMMON:FOOT BEGIN -->
 <footer class="site-foot">
