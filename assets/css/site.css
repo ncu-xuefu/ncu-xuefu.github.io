@@ -89,7 +89,7 @@ h3{font-size:17px;font-weight:600}
 .site-head{position:sticky;top:0;z-index:80;background:var(--panel);
            border-bottom:1px solid var(--line)}
 .head-inner{height:56px;display:flex;align-items:center;justify-content:space-between}
-.brand{display:flex;align-items:center;color:var(--ink)}
+.brand{display:flex;align-items:center;min-height:44px;color:var(--ink)}  /* E32：独立可点控件 ≥44×44 */
 .brand:hover{text-decoration:none}
 .brand-mark{width:32px;height:32px}
 .brand-text{display:flex;flex-direction:column;margin-left:10px}
@@ -172,7 +172,10 @@ body.nav-open{overflow:hidden}                 /* 抽屉打开锁滚动 */
 .sec > .wrap > h2::before{content:"";position:absolute;left:0;top:50%;transform:translateY(-50%);
                 width:4px;height:20px;border-radius:2px;background:var(--flame)}
 @media (min-width:960px){.sec > .wrap > h2{font-size:22px}}
-.sec-more{display:inline-block;margin-top:12px;font-size:14px}
+.sec-more{display:inline-flex;align-items:center;min-height:44px;margin-top:8px;font-size:14px}
+/* 为什么用 inline-flex 而不是 inline-block + padding：要的是"可点区域 ≥44px"，
+   而不是"文字块变大"。inline-flex + align-items:center 让 44px 的框把文字垂直居中，
+   行高与观感都不变（E32）。 */
 
 /* 4.7 服务卡（编号徽记，E10；不用图标库、不用品牌面色作状态） */
 .cards{display:grid;grid-template-columns:1fr;gap:16px}          /* Grid gap 允许 */

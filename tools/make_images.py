@@ -20,7 +20,7 @@ JPEG/PNG 保存后，Pillow **恒定带一个 20 字节的空 EXIF 段**。所�
 ----
     python tools/make_images.py                    # 生成全套（幂等）
     python tools/make_images.py --check            # 只校验，不改盘
-    python tools/make_images.py --photos DIR --slug fun-games-2026 [--cover 文件] [--crop center|top|bottom] [--thumbs] [--auto-quality]
+    python tools/make_images.py --photos DIR --slug <短名> [--cover 文件] [--crop center|top|bottom] [--thumbs] [--auto-quality] [--dest activities|team|campus]
     python tools/make_images.py --contact-sheet DIR --out FILE
 
 退出码：0 = 全绿 / 已生成；1 = 任一断言失败；2 = 用法错误。
@@ -331,6 +331,8 @@ MANIFEST = os.path.join(IMG, "image-manifest.tsv")
 MANIFEST_EXT = (".png", ".jpg", ".jpeg", ".ico")
 
 PHOTO_SUPPORTED = (".jpg", ".jpeg", ".png")
+# 允许的入库目标目录（§1.2 的目录树）：活动 / 成员 / 校园
+PHOTO_DESTS = (u"activities", u"team", u"campus")
 # 不支持的一律进 SKIP 列表打印出来——**不静默跳过**（静默跳过会让人以为处理过了）
 PHOTO_SKIP_KNOWN = (".psd", ".heic", ".webp", ".gif", ".tif", ".tiff", ".bmp",
                     ".mp4", ".mov", ".zip", ".rar")
@@ -426,16 +428,25 @@ def load_photo(path, reject_alpha, problems):
 
 
 def process_photos(dirpath, slug, cover=None, crop="center", thumbs=False,
-                   auto_quality=False, reject_alpha=False, quiet=False):
-    u"""活动照片入库。返回 (退出码, 输出说明行)。"""
+                   auto_quality=False, reject_alpha=False, quiet=False,
+                   dest=u"activities"):
+    u"""照片入库（活动 / 成员 / 校园）。返回 (退出码, 输出说明行)。
+
+    dest 只能是 activities / team / campus —— 方案 §1.2 的目录树里有 team/ 与 campus/，
+    但早先管线把输出目录写死成 activities，于是维护者按 README「图片只由工具生成」
+    根本无路可走，只能手拷 —— 而手拷的图带 GPS 时没有任何检查会发现（评审实测）。
+    """
     lines = []
     problems = []
+    if dest not in PHOTO_DESTS:
+        return 1, [u"✗ --dest 只能是 %s（收到 %r）"
+                   % (u" / ".join(PHOTO_DESTS), dest)]
     if not slug_ok(slug):
         return 1, [u"✗ slug 必须匹配 ^[a-z0-9-]{3,40}$（收到 %r）" % slug]
     if not os.path.isdir(dirpath):
         return 1, [u"✗ 输入目录不存在：%s" % dirpath]
 
-    outdir = os.path.join(IMG, "activities")
+    outdir = os.path.join(IMG, dest)
     if not os.path.isdir(outdir):
         os.makedirs(outdir)
 
@@ -807,13 +818,15 @@ def check(rep):
                     flame += 1
                 if b > r + 15 and b > 150:
                     blue += 1
-        rep.info(u"favicon-16.png：不透明 %d 像素；火焰 %d（阈值 ≥6）、蓝色主导 %d（阈值 ≥70）"
+        rep.info(u"favicon-16.png：不透明 %d 像素；火焰 %d（阈值 ≥8）、蓝色主导 %d（阈值 ≥70）"
                  % (opaque, flame, blue))
         if opaque < 150:
             rep.fail("image", "favicon-16.png", u"不透明像素仅 %d，图基本是空的" % opaque)
             ok = False
-        if flame < 6:
-            rep.fail("image", "favicon-16.png", u"火焰像素 %d < 6（缩丢了）" % flame)
+        # 阈值用方案 §5.2 与 E33 写的 ≥8（实测也是 8）。早先我自己压到 6「留余量」，
+        # 那是把冻结断言值放宽到观测值以下 —— 评审指出后改回方案原值。
+        if flame < 8:
+            rep.fail("image", "favicon-16.png", u"火焰像素 %d < 8（缩丢了）" % flame)
             ok = False
         if blue < 70:
             rep.fail("image", "favicon-16.png", u"蓝色主导像素 %d < 70（蓝没了或糊成一团）" % blue)
@@ -856,6 +869,29 @@ def check(rep):
             ok = False
         else:
             rep.info(u"image-manifest.tsv：%d 项，与磁盘一致" % (len(manifest_rows())))
+
+    # 10) 全量元数据断言：assets/img 下**每一个**图片文件都不许带 EXIF/ICC/XMP。
+    #     为什么不能只查管线自己写的那批：team/ 与 campus/ 的照片可能被人工直接拷进来，
+    #     手拷的图带 GPS 时，没有这一步就没有任何东西会发现（评审实测的缺口）。
+    scanned = 0
+    for root_dir, _dirs, files in os.walk(IMG):
+        for f in sorted(files):
+            if not f.lower().endswith((".png", ".jpg", ".jpeg", ".ico")):
+                continue
+            p = os.path.join(root_dir, f)
+            rel = os.path.relpath(p, ROOT).replace("\\", "/")
+            scanned += 1
+            n_exif = len(Image.open(p).getexif())
+            if n_exif:
+                rep.fail("image", rel, u"EXIF 标签数 %d（应为 0）" % n_exif)
+                ok = False
+            head = io.open(p, "rb").read()
+            for marker, label in ((b"ICC_PROFILE", u"ICC"), (b"iCCP", u"ICC"),
+                                  (b"http://ns.adobe.com/xap/1.0/", u"XMP")):
+                if marker in head:
+                    rep.fail("image", rel, u"携带 %s 元数据" % label)
+                    ok = False
+    rep.info(u"元数据全量抽检：%d 个图片文件" % scanned)
 
     return ok
 
@@ -912,13 +948,14 @@ def main(argv):
 
     if argv[0] == "--photos":
         opts = {"cover": None, "crop": u"center", "thumbs": False,
-                "auto_quality": False, "reject_alpha": False}
+                "auto_quality": False, "reject_alpha": False,
+                "dest": u"activities"}
         dirpath = slug = None
         rest = argv[1:]
         i = 0
         while i < len(rest):
             a = rest[i]
-            if a in ("--slug", "--cover", "--crop"):
+            if a in ("--slug", "--cover", "--crop", "--dest"):
                 if i + 1 >= len(rest):
                     print(u"✗ %s 缺参数" % a)
                     return 2
@@ -949,7 +986,8 @@ def main(argv):
         code, lines = process_photos(dirpath, opts["slug"], cover=opts["cover"],
                                      crop=opts["crop"], thumbs=opts["thumbs"],
                                      auto_quality=opts["auto_quality"],
-                                     reject_alpha=opts["reject_alpha"])
+                                     reject_alpha=opts["reject_alpha"],
+                                     dest=opts["dest"])
         for line in lines:
             print(line)
         if code == 0:

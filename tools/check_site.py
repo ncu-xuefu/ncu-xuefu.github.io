@@ -66,6 +66,8 @@ RULE_TITLES = {
     "S22": u"404 专项",
     "S23": u"隐私词",
     "S24": u"体积预算",
+    "S25": u"内容硬事实",
+    "S26": u"图片元数据",
 }
 
 # 全局：--release 时施工期豁免项转为 FAIL（E3）
@@ -257,32 +259,54 @@ def classify_ref(val, page):
     return ("ok", u"相对路径")
 
 
+def s3_scan_targets():
+    u"""S3 的扫描面：8 个页面 + site.css + manifest.json。
+
+    为什么要带上 CSS：**CSS 才最可能被塞进外链**（背景图、@import、外链字体），
+    而 S3 原先只遍历 HTML —— 于是往 site.css 里加一条
+    `background:url(https://…)` 全站零外链红线毫无反应。这是收尾评审实测出来的缺口。
+    """
+    out = []
+    for page in existing_pages():
+        out.append((page, clean_for_scan(read_text(os.path.join(ROOT, page)))))
+    for rel in ("assets/css/site.css", "manifest.json"):
+        if exists_exact_case(rel):
+            raw = read_text(os.path.join(ROOT, rel.replace("/", os.sep)))
+            out.append((rel, strip_css_comments(raw) if rel.endswith(".css") else raw))
+    return out
+
+
 def s3_no_external(rep, ctx):
     abs_urls = 0
-    for page in existing_pages():
-        text = clean_for_scan(read_text(os.path.join(ROOT, page)))
+    for name, text in s3_scan_targets():
+        is_page = name.endswith(".html")
         for m in ATTR_RE.finditer(text):
-            kind, why = classify_ref(m.group(1), page)
+            kind, why = classify_ref(m.group(1), name)
             if kind == "bad":
-                rep.fail("S3", u"%s:%d" % (page, line_of(text, m.start())),
+                rep.fail("S3", u"%s:%d" % (name, line_of(text, m.start())),
                          u"%s → %s" % (why, m.group(1)))
             elif kind == "abs":
                 abs_urls += 1
-        # og:url / og:image 是白名单里仅有的两处绝对 URL（E8）
-        for m in OG_RE.finditer(text):
-            if not m.group(1).startswith(SITE_URL):
-                rep.fail("S3", u"%s:%d" % (page, line_of(text, m.start())),
-                         u"og 绝对 URL 不在本站域内：%s" % m.group(1))
-            else:
-                abs_urls += 1
+        if is_page:
+            # og:url / og:image 是白名单里仅有的两处绝对 URL（E8）
+            for m in OG_RE.finditer(text):
+                if not m.group(1).startswith(SITE_URL):
+                    rep.fail("S3", u"%s:%d" % (name, line_of(text, m.start())),
+                             u"og 绝对 URL 不在本站域内：%s" % m.group(1))
+                else:
+                    abs_urls += 1
         for m in CSS_URL_RE.finditer(text):
-            kind, why = classify_ref(m.group(1).strip(u"'\" "), page)
+            kind, why = classify_ref(m.group(1).strip(u"'\" "), name)
             if kind == "bad":
-                rep.fail("S3", u"%s:%d" % (page, line_of(text, m.start())),
+                rep.fail("S3", u"%s:%d" % (name, line_of(text, m.start())),
                          u"%s → %s" % (why, m.group(1)))
-    # 7 页 × (og:image + og:url) = 14（§0.2 第 1 条）
-    if abs_urls not in (0, 14):
-        rep.fail("S3", u"全站", u"http(s) 引用共 %d 处，应为 0 或 14（§0.2-1）" % abs_urls)
+    # 允许的绝对 URL 数 = 现有内页数 × 2（每页 og:image + og:url，§0.2 第 1 条）。
+    # 早先写成"0 或 14"是钝的：og 全丢也会过；现在按实际页数精确对账。
+    expect = 2 * len([p for p in MAIN_PAGES if exists_exact_case(p)])
+    if abs_urls != expect:
+        rep.fail("S3", u"全站",
+                 u"http(s) 引用共 %d 处，应为 %d 处（%d 页 × og:image+og:url）"
+                 % (abs_urls, expect, expect // 2))
 
 
 # --------------------------------------------------------------------------
@@ -453,6 +477,14 @@ def s11_img_attrs(rep, ctx):
             for need in needed:
                 if need not in attrs:
                     rep.fail("S11", where, u"<img> 缺属性 %s" % need)
+            # 值必须是正整数像素。只查"属性键在不在"不够：`width="abc" height=""` 会让
+            # S11 放行、S12 的 int() 抛异常后静默 continue，两条规则一起漏
+            # —— E31/P6"宽高属性防布局跳动"就被 `width="auto"` 之类的写法架空了（评审实测）。
+            for key in ("width", "height"):
+                if key in attrs and not re.match(r"^[1-9]\d*$", attrs[key]):
+                    rep.fail("S11", where,
+                             u'%s="%s" 不是正整数像素（E31/P6 需要真实像素）'
+                             % (key, attrs[key]))
             loading = attrs.get("loading", u"")
             classes = attrs.get("class", u"").split()
             if loading == "eager":
@@ -519,7 +551,9 @@ def s12_img_manifest(rep, ctx):
             try:
                 aw, ah = int(attrs["width"]), int(attrs["height"])
             except (KeyError, ValueError):
-                continue          # 属性缺失/非数字已由 S11 报过，此处不重复刷屏
+                # 属性缺失或非数字：**已在 S11 报 FAIL**（S11 现在要求 ^[1-9]\d*$），
+                # 这里不重复刷屏。注意别把这里写成静默放过——那正是评审找到的缺口。
+                continue
             if ah and fh and abs(aw / float(ah) - fw / float(fh)) > 0.01:
                 rep.fail("S12", where,
                          u"属性宽高比与文件不符（属性 %d×%d / 文件 %d×%d）" % (aw, ah, fw, fh))
@@ -553,6 +587,20 @@ def s5_placeholders(rep, ctx):
                      u'占位对账失败：`【待填` %d 处，`class="ph"` %d 处' % (n_text, n_span))
         if n_todo:
             rep.warn("S5", page, u"`<!-- TODO` %d 处" % n_todo)
+        # E2：`<title>`、meta 的 content、`<img>` 的 alt 里**禁止**出现占位——
+        # 这几个位置不会渲染成黄底，占位在这里等于隐形，比没写还危险。
+        for m in re.finditer(r"<title\b[^>]*>(.*?)</title>", raw, re.S):
+            if PLACEHOLDER_PREFIX in m.group(1):
+                rep.fail("S5", u"%s:%d" % (page, line_of(raw, m.start())),
+                         u"<title> 里出现占位（E2）")
+        for m in re.finditer(r'<meta\b[^>]*content="([^"]*)"', raw, re.I):
+            if PLACEHOLDER_PREFIX in m.group(1):
+                rep.fail("S5", u"%s:%d" % (page, line_of(raw, m.start())),
+                         u"meta content 里出现占位（E2）")
+        for m in re.finditer(r'<img\b[^>]*alt="([^"]*)"', raw, re.I):
+            if PLACEHOLDER_PREFIX in m.group(1):
+                rep.fail("S5", u"%s:%d" % (page, line_of(raw, m.start())),
+                         u"<img> 的 alt 里出现占位（E2）")
     if total == 0:
         rep.info(u"占位计数：0（可以上线了）")
         return
@@ -1149,6 +1197,134 @@ def s24_budget(rep, ctx):
 
 
 # --------------------------------------------------------------------------
+# S25 —— 内容硬事实与结构断言
+# --------------------------------------------------------------------------
+# 《实现方案》在散文明文里声明过、却没有分配规则号、因而一直没人守的几条
+# （收尾评审逐条点出）。新增规则只增不减，不削弱任何既有断言。
+TIMELINE_RE = re.compile(r'<ol class="timeline">(.*?)</ol>', re.S)
+GALLERY_RE = re.compile(r'<div class="gallery">(.*?)</div>', re.S)
+NOTICE_ID_ORDER_RE = re.compile(r'<article class="notice" id="n-(\d{8})-')
+TIME_TEXT_RE = re.compile(r'<time datetime="(\d{4}-\d{2}-\d{2})">([^<]*)</time>')
+DESC_LEN_MIN, DESC_LEN_MAX = 40, 160
+
+
+def s25_content_facts(rep, ctx):
+    # E35：时间线起点是中心唯一的硬事实，被改掉必须有人发现（§3.5 明文"断言（E35）"）
+    if exists_exact_case("about.html"):
+        text = clean_for_scan(read_text(os.path.join(ROOT, "about.html")))
+        m = TIMELINE_RE.search(text)
+        if not m:
+            rep.fail("S25", "about.html", u'找不到 <ol class="timeline">')
+        elif u"2006.10.10" not in m.group(1):
+            rep.fail("S25", "about.html",
+                     u"发展历程时间线里找不到起点 2006.10.10（E35：中心唯一硬事实）")
+
+    # E23：description 40–160 字
+    for page in [p for p in MAIN_PAGES if exists_exact_case(p)]:
+        text = strip_comments(read_text(os.path.join(ROOT, page)))
+        m = DESC_RE.search(text)
+        if m:
+            n = len(m.group(1))
+            if not (DESC_LEN_MIN <= n <= DESC_LEN_MAX):
+                rep.fail("S25", page, u"description %d 字，应在 %d–%d 字之间（E23）"
+                         % (n, DESC_LEN_MIN, DESC_LEN_MAX))
+
+    # §3.7-② <time> 的 datetime 与文本一致；§3.7-③ 公告按日期严格倒序
+    if exists_exact_case("notices.html"):
+        text = clean_for_scan(read_text(os.path.join(ROOT, "notices.html")))
+        for m in TIME_TEXT_RE.finditer(text):
+            shown = m.group(2).strip()
+            if shown and shown != m.group(1):
+                rep.fail("S25", u"notices.html:%d" % line_of(text, m.start()),
+                         u"<time> 的 datetime(%s) 与显示文本(%s) 不一致（§3.7-②）"
+                         % (m.group(1), shown))
+        order = NOTICE_ID_ORDER_RE.findall(text)
+        if order != sorted(order, reverse=True):
+            rep.fail("S25", "notices.html", u"公告未按日期严格倒序：%s（§3.7-③）" % order)
+
+    # §3.9-④ 每个图集 2–6 张图
+    for page in ("activities.html", "index.html"):
+        if not exists_exact_case(page):
+            continue
+        text = clean_for_scan(read_text(os.path.join(ROOT, page)))
+        for idx, g in enumerate(GALLERY_RE.finditer(text), 1):
+            n = len(re.findall(r"<img\b", g.group(1)))
+            if not (2 <= n <= 6):
+                rep.fail("S25", u"%s:%d" % (page, line_of(text, g.start())),
+                         u"第 %d 个图集有 %d 张图，应在 2–6 张（§3.9-④）" % (idx, n))
+
+
+# --------------------------------------------------------------------------
+# S26 —— 图片元数据（隐私红线 §7.3-3）
+# --------------------------------------------------------------------------
+# 不依赖 Pillow：直接解容器，看有没有 EXIF / ICC / XMP / 文本块。
+# 为什么要有它：照片管线只对自己写出的那一批做 EXIF 回读断言；
+# 而 team/ 与 campus/ 的照片在方案里根本没走管线 —— 直接拷进 assets/ 的图
+# 带 GPS 时，此前没有任何检查会发现（收尾评审实测）。
+PNG_META_CHUNKS = {b"eXIf": "EXIF", b"iCCP": "ICC", b"tEXt": "tEXt",
+                   b"zTXt": "zTXt", b"iTXt": "iTXt"}
+JPEG_META_MARKERS = [(b"Exif\x00\x00", "EXIF"), (b"ICC_PROFILE", "ICC"),
+                     (b"http://ns.adobe.com/xap/1.0/", "XMP"),
+                     (b"Photoshop 3.0", "IPTC")]
+
+
+def png_chunk_types(data):
+    if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return None
+    out, i, size = [], 8, len(data)
+    while i + 12 <= size:
+        length = int.from_bytes(data[i:i + 4], "big")
+        kind = data[i + 4:i + 8]
+        out.append(kind)
+        if kind == b"IEND" or length < 0:
+            break
+        i += 12 + length
+    return out
+
+
+def image_meta_flags(path):
+    with io.open(path, "rb") as fh:
+        data = fh.read(4 * 1024 * 1024)
+    low = path.lower()
+    if low.endswith((".jpg", ".jpeg")):
+        return [label for marker, label in JPEG_META_MARKERS if marker in data]
+    if low.endswith(".png"):
+        chunks = png_chunk_types(data)
+        if chunks is None:
+            return [u"不是合法 PNG"]
+        return sorted(set(PNG_META_CHUNKS[c] for c in chunks if c in PNG_META_CHUNKS))
+    if low.endswith(".ico"):
+        flags = set()
+        for m in re.finditer(re.escape(b"\x89PNG\r\n\x1a\n"), data):
+            chunks = png_chunk_types(data[m.start():])
+            if chunks:
+                flags |= set(PNG_META_CHUNKS[c] for c in chunks if c in PNG_META_CHUNKS)
+        return sorted(flags)
+    return []
+
+
+def s26_image_metadata(rep, ctx):
+    base = os.path.join(ROOT, "assets", "img")
+    if not os.path.isdir(base):
+        return
+    checked = 0
+    for root_dir, _dirs, files in os.walk(base):
+        for f in sorted(files):
+            if not f.lower().endswith((".png", ".jpg", ".jpeg", ".ico")):
+                continue
+            path = os.path.join(root_dir, f)
+            rel = os.path.relpath(path, ROOT).replace("\\", "/")
+            flags = image_meta_flags(path)
+            checked += 1
+            if flags:
+                rep.fail("S26", rel,
+                         u"携带元数据 %s（§7.3-3：一切入库图片必须剥掉定位与设备信息）"
+                         % u"、".join(flags))
+    if checked:
+        rep.info(u"图片元数据抽检：%d 个文件，无 EXIF/ICC/XMP/文本块" % checked)
+
+
+# --------------------------------------------------------------------------
 # 主流程
 # --------------------------------------------------------------------------
 RULES = [
@@ -1176,6 +1352,8 @@ RULES = [
     ("S22", s22_404),
     ("S23", s23_privacy),
     ("S24", s24_budget),
+    ("S25", s25_content_facts),
+    ("S26", s26_image_metadata),
 ]
 
 

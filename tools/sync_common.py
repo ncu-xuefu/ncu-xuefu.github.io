@@ -260,6 +260,12 @@ def cmd_fix():
         if not wanted:
             continue
         path = os.path.join(ROOT, target)
+        if not os.path.isfile(path):
+            # 缺一个目标文件不能把整次 --fix 崩掉：早先这里直接 read_text 抛
+            # FileNotFoundError，而且崩在遍历中途，前面的文件已经写盘 → 留下"半同步"状态。
+            # --check 对缺文件是优雅报错的，--fix 必须一样稳（它才是 README 推荐的那条命令）。
+            print(u"✗ %s：目标文件不存在，跳过（其余文件继续同步）" % target)
+            continue
         text = read_text(path)
         original = text
         for name, want in wanted:

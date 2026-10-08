@@ -45,7 +45,7 @@
 
 ```html
 <!-- COMMON:HEAD BEGIN --> … <!-- COMMON:HEAD END -->
-<!-- COMMON:NAV  BEGIN --> … <!-- COMMON:NAV  END -->
+<!-- COMMON:NAV BEGIN --> … <!-- COMMON:NAV END -->
 <!-- COMMON:FOOT BEGIN --> … <!-- COMMON:FOOT END -->
 ```
 
@@ -96,6 +96,46 @@ python tools/make_images.py --contact-sheet "<目录>" --out "<项目外的路�
 照《内容更新.md》独立加一条公告成功（《内容更新.md》第 7 节有勾选表）。
 
 ## 5. 上线步骤（命令级）
+
+> **先做这两件事，再推送。** 它们是上线前唯一容易做错的步骤。
+
+### ① 如果组织名不叫 `ncu-xuefu`
+
+全站有 14 处地址（7 页 × `og:url` + `og:image`）**硬编码**了 `https://ncu-xuefu.github.io/`，
+另外 `tools/check_site.py` 顶部的 `SITE_URL` 常量也是它。组织名若不同，推送前改这三处：
+
+```bash
+# 1) 改校验器里的常量（1 处）
+#    tools/check_site.py  →  SITE_URL = "https://<你的org>.github.io/"
+
+# 2) 改 index.html 的 COMMON:HEAD 里那一行 og:image（1 行）→ 然后同步到全站
+python tools/sync_common.py --fix
+
+# 3) 改 7 页各自的 og:url（每页 1 行；它们在 COMMON 块外，所以要逐页改）
+
+python tools/check_site.py      # S3 会核对绝对 URL 前缀；改错了这里会红
+```
+
+改错的后果不是静默的：`check_site.py` 的 S3 会因为前缀对不上而报 FAIL——分享卡图与链接全废，
+但你能发现。
+
+### ② 摘掉施工期的 `noindex`
+
+施工期 7 页都带着 `<meta name="robots" content="noindex">`（防止占位内容被搜索引擎收录）。
+它在 **COMMON:HEAD 块里**，所以**只改一处**：
+
+```bash
+# 1) 删掉 index.html 中 COMMON:HEAD 里的这一行：
+#    <meta name="robots" content="noindex">
+# 2) 同步到其余 6 页：
+python tools/sync_common.py --fix
+# 3) 确认：
+python tools/check_site.py --release    # S21 会断言"7 页都不含 noindex、404 恒含"
+```
+
+> ⚠ **不要手改 7 个页面**——COMMON 块是单源的，手改会在下一次 `--fix` 时被覆盖回去，
+> 而且极容易漏掉一页。这正是"改 7 处必出事故"那一条。
+> 404.html 的 `noindex` **要保留**（错误页永远不该被收录），它不在 COMMON 块里。
 
 ```bash
 # ① 先在 GitHub 网页建好 org 与仓库 <org>.github.io（Public），然后：
