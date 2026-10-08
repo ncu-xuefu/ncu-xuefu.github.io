@@ -1,0 +1,19 @@
+# Python / OS
+__pycache__/
+*.pyc
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# 内部文档与工作材料（不入公开仓库；E24）
+门户网站MVP计划书.md
+门户网站实现方案.md
+docs/
+
+# 大文件与原始素材（防仓库膨胀；E38）
+*.psd
+*.zip
+*.mp4
+*.mov
+brand-src/_raw/
+assets/img/**/_raw/
