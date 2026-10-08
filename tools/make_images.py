@@ -26,6 +26,7 @@ JPEG/PNG 保存后，Pillow **恒定带一个 20 字节的空 EXIF 段**。所�
 退出码：0 = 全绿 / 已生成；1 = 任一断言失败；2 = 用法错误。
 """
 from io import BytesIO
+import base64
 import io
 import os
 import re
@@ -134,6 +135,14 @@ ICON_SPECS = [
     (u"icon-512.png", 512),
 ]
 
+# 吉祥物（§5.4）：**原像素不动**，只做 256 色量化压体积。源图实测透明区无深色残留，
+# 无需清洗。全管线通行"只缩不放"，所以这里绝不 resize。
+MASCOT_SPECS = [
+    (u"mascot-girl.png", u"mascot-girl-222x282.png"),
+    (u"mascot-boy.png", u"mascot-boy-121x321.png"),
+]
+MASCOT_CAP = 25 * 1024
+
 # OG 分享卡（§5.3）。文案不依赖 A1——M2 就要产出；日后要换文案就**换文件名**
 # （og-cover-2.png）并 sync_common --fix，以绕开微信按 URL 的分享卡缓存（E8）。
 OG_NAME = u"og-cover.png"
@@ -195,6 +204,64 @@ def render_ico():
     buf = BytesIO()
     big.save(buf, "ICO", sizes=[(s, s) for s in ICO_FRAMES])
     return buf.getvalue()
+
+
+def render_mascot(src_name):
+    u"""吉祥物：256 色量化，原像素尺寸不变。返回 (png 字节, 源尺寸)。"""
+    src = os.path.join(BRAND_SRC, src_name)
+    im = Image.open(src).convert("RGBA")
+    # FASTOCTREE：对照片/水彩类图像比默认的 MEDIANCUT 更快也更稳。
+    # 量化会把 RGBA 变成 P 模式 + 内嵌调色板 alpha，存 PNG 时自动写 tRNS，
+    # 四角 alpha 仍为 0（已由断言守住）。
+    q = im.quantize(colors=256, method=Image.FASTOCTREE)
+    buf = BytesIO()
+    q.save(buf, "PNG", optimize=True)
+    return buf.getvalue(), im.size
+
+
+# 404 页的两张 data-URI（E6）：404 必须**自包含**——Pages 的 404 机制是"内容替换、
+# URL 不变"，任何相对路径在 /a/b/c 下都会挂，所以会徽与吉祥物只能内联。
+# 块由本工具生成/刷新，人工不要改（§3.11 / §5.4）。
+ART_BEGIN_LINE = u"<!-- 404:ART BEGIN · 由 tools/make_images.py 生成（E6），勿手改 -->"
+ART_END_LINE = u"<!-- 404:ART END -->"
+ART_404_EMBLEM = 192
+PAGE_404 = os.path.join(ROOT, "404.html")
+PAGE_404_CAP = 90 * 1024
+ART_RE = re.compile(r"[ \t]*<!-- 404:ART BEGIN[^\n]*-->\n.*?\n[ \t]*<!-- 404:ART END -->", re.S)
+
+
+def render_404_art(indent):
+    u"""渲染 404 的 ART 块（含标记行），按给定缩进。"""
+    emb = step_resize(load_master(), ART_404_EMBLEM)
+    emb = emb.quantize(colors=256, method=Image.FASTOCTREE)
+    buf = BytesIO()
+    emb.save(buf, "PNG", optimize=True)
+    em_b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+    girl_bytes, _ = render_mascot(u"mascot-girl-222x282.png")
+    girl_b64 = base64.b64encode(girl_bytes).decode("ascii")
+    return (indent + ART_BEGIN_LINE + u"\n"
+            + indent + u'<img class="emblem" src="data:image/png;base64,' + em_b64
+            + u'" width="96" height="96" alt="">\n'
+            + indent + u'<img class="girl" src="data:image/png;base64,' + girl_b64
+            + u'" width="222" height="282" alt="学服吉祥物">\n'
+            + indent + ART_END_LINE)
+
+
+def refresh_404():
+    u"""有 404.html 就刷新其 ART 块；返回 True 表示改动了。"""
+    if not os.path.isfile(PAGE_404):
+        return False
+    text = io.open(PAGE_404, "r", encoding="utf-8", newline="").read()
+    m = ART_RE.search(text)
+    if m is None:
+        return False
+    indent = re.match(r"[ \t]*", m.group(0)).group(0)
+    new_block = render_404_art(indent)
+    if m.group(0) == new_block:
+        return False
+    with io.open(PAGE_404, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(text[:m.start()] + new_block + text[m.end():])
+    return True
 
 
 def render_icon_png(size):
@@ -296,6 +363,15 @@ def generate(report):
     og_bytes, meta = render_og()
     if write_bytes(rel, og_bytes):
         report.append(u"✓ 生成 %s（%d×%d，文字墨点 %d）" % (rel, OG_W, OG_H, meta["ink"]))
+        changed += 1
+    for name, src_name in MASCOT_SPECS:
+        rel = "assets/img/" + name
+        data, size = render_mascot(src_name)
+        if write_bytes(rel, data):
+            report.append(u"✓ 生成 %s（%d×%d，%d B）" % (rel, size[0], size[1], len(data)))
+            changed += 1
+    if refresh_404():
+        report.append(u"✓ 刷新 404.html 的 404:ART 块")
         changed += 1
     return changed
 
@@ -416,7 +492,39 @@ def check(rep):
         rep.fail("image", ICO_NAME, u"产物不存在")
         ok = False
 
-    # 6) favicon-16 的像素构成：16×16 只有 208 个不透明像素，只有像素级断言能证明
+    # 6) 吉祥物：尺寸必须与源一致（"只缩不放"的反面——也不许被放大），四角透明仍在
+    for name, src_name in MASCOT_SPECS:
+        rel = "assets/img/" + name
+        path = os.path.join(ROOT, rel)
+        if not os.path.isfile(path):
+            rep.fail("image", rel, u"产物不存在")
+            ok = False
+            continue
+        data, src_size = render_mascot(src_name)
+        if io.open(path, "rb").read() != data:
+            rep.fail("image", rel, u"与重算结果不一致")
+            ok = False
+        im = Image.open(path).convert("RGBA")
+        if im.size != src_size:
+            rep.fail("image", rel, u"尺寸被改动：%s，源为 %s" % (im.size, src_size))
+            ok = False
+        corners = [(0, 0), (im.size[0] - 1, 0), (0, im.size[1] - 1),
+                   (im.size[0] - 1, im.size[1] - 1)]
+        for pt in corners:
+            if im.getpixel(pt)[3] != 0:
+                rep.fail("image", rel, u"角像素 %s 的 alpha 非 0（%d）" % (pt, im.getpixel(pt)[3]))
+                ok = False
+                break
+        size_b = os.path.getsize(path)
+        rep.info(u"%s：%d×%d，%d B（上限 %d）" % (name, im.size[0], im.size[1], size_b, MASCOT_CAP))
+        if size_b > MASCOT_CAP:
+            rep.fail("image", rel, u"体积 %d B 超上限 %d" % (size_b, MASCOT_CAP))
+            ok = False
+        if len(Image.open(path).getexif()) != 0:
+            rep.fail("image", rel, u"EXIF 标签数非 0")
+            ok = False
+
+    # 7) favicon-16 的像素构成：16×16 只有 208 个不透明像素，只有像素级断言能证明
     #    "还是那个会徽，而不是一个色块"。阈值见 §5.2（**首跑校准后固定**）。
     #
     #    首跑校准结论（2026-10-08，实测值即下方打印值）：
@@ -451,6 +559,26 @@ def check(rep):
             ok = False
         if blue < 70:
             rep.fail("image", "favicon-16.png", u"蓝色主导像素 %d < 70（蓝没了或糊成一团）" % blue)
+            ok = False
+
+    # 8) 404 的 ART 块：必须存在，且与当前源重算一致（图换了却忘了刷新 = 线上 404 还是旧图）
+    if not os.path.isfile(PAGE_404):
+        rep.info(u"404.html 尚未建立——ART 块校验留待模板写入后（T19）")
+    else:
+        text = io.open(PAGE_404, "r", encoding="utf-8", newline="").read()
+        m = ART_RE.search(text)
+        if m is None:
+            rep.fail("image", "404.html", u"找不到 404:ART 标记块")
+            ok = False
+        else:
+            indent = re.match(r"[ \t]*", m.group(0)).group(0)
+            if m.group(0) != render_404_art(indent):
+                rep.fail("image", "404.html", u"404:ART 块与当前源不一致（图换了没刷新）")
+                ok = False
+        size_b = os.path.getsize(PAGE_404)
+        rep.info(u"404.html：%d B（上限 %d）" % (size_b, PAGE_404_CAP))
+        if size_b > PAGE_404_CAP:
+            rep.fail("image", "404.html", u"体积 %d B 超上限 %d" % (size_b, PAGE_404_CAP))
             ok = False
 
     return ok
