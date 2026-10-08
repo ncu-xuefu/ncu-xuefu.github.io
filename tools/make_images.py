@@ -33,7 +33,7 @@ import re
 import sys
 
 try:
-    from PIL import Image, ImageChops, ImageFilter, ImageFont, ImageDraw
+    from PIL import Image, ImageChops, ImageFilter, ImageFont, ImageDraw, ImageOps
 except ImportError:
     sys.stderr.write(u"✗ 需要 Pillow：python -m pip install pillow\n")
     raise
@@ -324,6 +324,260 @@ def render_og():
     return buf.getvalue(), {"ink": ink, "top": top, "h1": h1, "h2": h2}
 
 
+# --------------------------------------------------------------------------
+# 照片管线（§5.5）
+# --------------------------------------------------------------------------
+MANIFEST = os.path.join(IMG, "image-manifest.tsv")
+MANIFEST_EXT = (".png", ".jpg", ".jpeg", ".ico")
+
+PHOTO_SUPPORTED = (".jpg", ".jpeg", ".png")
+# 不支持的一律进 SKIP 列表打印出来——**不静默跳过**（静默跳过会让人以为处理过了）
+PHOTO_SKIP_KNOWN = (".psd", ".heic", ".webp", ".gif", ".tif", ".tiff", ".bmp",
+                    ".mp4", ".mov", ".zip", ".rar")
+
+SLUG_RE = re.compile(r"^[a-z0-9-]{3,40}$")
+
+PHOTO_CAP_COVER = 150 * 1024
+PHOTO_CAP_BIG = 250 * 1024
+PHOTO_CAP_THUMB = 60 * 1024
+COVER_SIZE = (1200, 675)          # 16:9
+BIG_EDGE = 1280
+THUMB_EDGE = 480
+Q_COVER, Q_BIG, Q_THUMB = 82, 80, 78
+Q_FLOOR = 70                      # --auto-quality 的下限
+
+
+def slug_ok(slug):
+    return bool(slug) and bool(SLUG_RE.match(slug))
+
+
+def fit_within(im, edge):
+    u"""长边压到 ≤edge；**源不够大就不放大**（全管线通行"只缩不放"）。
+
+    返回值直接写进 HTML 的 width/height，所以必须是真实像素。
+    """
+    w, h = im.size
+    if max(w, h) <= edge:
+        return im
+    scale = edge / float(max(w, h))
+    return im.resize((max(1, int(round(w * scale))), max(1, int(round(h * scale)))),
+                     Image.LANCZOS)
+
+
+def make_cover(im, crop_mode):
+    u"""16:9 裁切后缩到 1200×675；**源不够大就按源能力输出**，不放大。
+
+    注意两步都要：只裁不缩会留下 6000×3375 这样的巨图（实测踩过），
+    只缩不裁会破坏 16:9。输出尺寸会被写进 HTML 的 width/height，必须是真实像素。
+    """
+    w, h = im.size
+    ar = COVER_SIZE[0] / float(COVER_SIZE[1])
+    if w / float(h) > ar:
+        cw, ch = int(round(h * ar)), h
+    else:
+        cw, ch = w, int(round(w / ar))
+    cw, ch = max(1, min(cw, w)), max(1, min(ch, h))
+    if crop_mode == "top":
+        top = 0
+    elif crop_mode == "bottom":
+        top = h - ch
+    else:
+        top = (h - ch) // 2
+    left = (w - cw) // 2
+    tw, th = min(COVER_SIZE[0], cw), min(COVER_SIZE[1], ch)
+    return im.crop((left, top, left + cw, top + ch)).resize((tw, th), Image.LANCZOS)
+
+
+def save_jpeg(im, path, quality, cap, auto_quality):
+    u"""存 JPEG 并守住体积；--auto-quality 时二分降 q（下限 70）。
+
+    返回 (实际质量, 实际字节, 是否仍超限)。
+    """
+    q = quality
+    while True:
+        buf = BytesIO()
+        im.save(buf, "JPEG", quality=q, progressive=True, optimize=True)
+        size = buf.tell()
+        if size <= cap or not auto_quality or q <= Q_FLOOR:
+            break
+        q = max(Q_FLOOR, q - 4)
+    with io.open(path, "wb") as fh:
+        fh.write(buf.getvalue())
+    return q, size, size > cap
+
+
+def load_photo(path, reject_alpha, problems):
+    u"""按固定顺序处理：open → exif_transpose → 铺白底 → RGB。
+
+    exif_transpose 必须在最前面：手机竖拍的照片靠 Orientation 标签才是正的，
+    不先转置，后面所有裁切都按错误的宽高比算，人物会被裁掉头。
+    """
+    im = Image.open(path)
+    im = ImageOps.exif_transpose(im) or im
+    if im.mode in ("RGBA", "LA", "P"):
+        rgba = im.convert("RGBA")
+        if reject_alpha:
+            problems.append(u"✗ %s 含透明通道（--reject-alpha）" % os.path.basename(path))
+            return None
+        problems.append(u"! %s 含透明通道，已铺白底" % os.path.basename(path))
+        bg = Image.new("RGBA", rgba.size, (255, 255, 255, 255))
+        im = Image.alpha_composite(bg, rgba)
+    return im.convert("RGB")
+
+
+def process_photos(dirpath, slug, cover=None, crop="center", thumbs=False,
+                   auto_quality=False, reject_alpha=False, quiet=False):
+    u"""活动照片入库。返回 (退出码, 输出说明行)。"""
+    lines = []
+    problems = []
+    if not slug_ok(slug):
+        return 1, [u"✗ slug 必须匹配 ^[a-z0-9-]{3,40}$（收到 %r）" % slug]
+    if not os.path.isdir(dirpath):
+        return 1, [u"✗ 输入目录不存在：%s" % dirpath]
+
+    outdir = os.path.join(IMG, "activities")
+    if not os.path.isdir(outdir):
+        os.makedirs(outdir)
+
+    names = sorted(os.listdir(dirpath))
+    usable, skipped = [], []
+    for n in names:
+        p = os.path.join(dirpath, n)
+        if not os.path.isfile(p):
+            continue
+        ext = os.path.splitext(n)[1].lower()
+        if ext in PHOTO_SUPPORTED:
+            usable.append(n)
+        else:
+            skipped.append(n)
+
+    if not usable:
+        return 1, [u"✗ 目录里没有可处理的图片（jpg/jpeg/png）：%s" % dirpath]
+
+    lines.append(u"输入 %s：可用 %d 张，跳过 %d 个" % (dirpath, len(usable), len(skipped)))
+    for n in skipped:
+        lines.append(u"! SKIP %s（不支持的格式，未静默跳过）" % n)
+
+    numbered = len(usable) > 99
+    total = 0
+
+    # ① 封面
+    cover_name = cover if cover in usable else usable[0]
+    if cover is not None and cover not in usable:
+        lines.append(u"! --cover %s 不在可用清单里，改用 %s" % (cover, cover_name))
+    im = load_photo(os.path.join(dirpath, cover_name), reject_alpha, problems)
+    if im is not None:
+        cov = make_cover(im, crop)
+        path = os.path.join(outdir, "cover-%s.jpg" % slug)
+        q, size, over = save_jpeg(cov, path, Q_COVER, PHOTO_CAP_COVER, auto_quality)
+        total += size
+        lines.append(u"✓ cover-%s.jpg  %d×%d  q=%d  %d B%s"
+                     % (slug, cov.size[0], cov.size[1], q, size,
+                        u"  ← 超限！" if over else u""))
+        if over:
+            problems.append(u"✗ cover-%s.jpg 超 150 KB，建议 --auto-quality 或人工先缩" % slug)
+
+    # ② 图集
+    for i, n in enumerate(usable, 1):
+        im = load_photo(os.path.join(dirpath, n), reject_alpha, problems)
+        if im is None:
+            continue
+        big = fit_within(im, BIG_EDGE)
+        stem = u"%s-%s" % (slug, u"%03d" % i if numbered else u"%02d" % i)
+        path = os.path.join(outdir, stem + ".jpg")
+        q, size, over = save_jpeg(big, path, Q_BIG, PHOTO_CAP_BIG, auto_quality)
+        total += size
+        lines.append(u"✓ %s.jpg  %d×%d  q=%d  %d B%s"
+                     % (stem, big.size[0], big.size[1], q, size,
+                        u"  ← 超限！" if over else u""))
+        if over:
+            problems.append(u"✗ %s.jpg 超 250 KB" % stem)
+        if thumbs:
+            th = fit_within(im, THUMB_EDGE)
+            tpath = os.path.join(outdir, stem + u"-s.jpg")
+            q, size, over = save_jpeg(th, tpath, Q_THUMB, PHOTO_CAP_THUMB, auto_quality)
+            total += size
+            lines.append(u"✓ %s-s.jpg  %d×%d  %d B%s"
+                         % (stem, th.size[0], th.size[1], size,
+                            u"  ← 超限！" if over else u""))
+
+    # ③ 回读断言：没有任何一张带 EXIF（Pillow 恒定带 20 字节空段，故断言"标签数为 0"）
+    bad = []
+    for f in sorted(os.listdir(outdir)):
+        if not f.endswith(".jpg"):
+            continue
+        p = os.path.join(outdir, f)
+        n = len(Image.open(p).getexif())
+        if n != 0:
+            bad.append(u"✗ %s EXIF 标签数 %d" % (f, n))
+    problems.extend(bad)
+
+    lines.append(u"合计 %d B（%d 个文件）" % (total, len(usable) + (1 if thumbs else 0) + 1))
+    lines.extend(problems)
+    ok = not [p for p in problems if p.startswith(u"✗")]
+    return (0 if ok else 1), lines
+
+
+def contact_sheet(dirpath, out_path, cols=5, cell=240):
+    u"""选图辅助：把目录里的图拼成一张带文件名的接触表，输出到项目**外**（不入库）。"""
+    names = [n for n in sorted(os.listdir(dirpath))
+             if os.path.splitext(n)[1].lower() in PHOTO_SUPPORTED]
+    if not names:
+        return 1, [u"✗ 目录里没有可处理的图片：%s" % dirpath]
+    rows = (len(names) + cols - 1) // cols
+    label_h = 22
+    sheet = Image.new("RGB", (cols * cell, rows * (cell + label_h)), (246, 247, 249))
+    font = load_font("msyh.ttc", 14)
+    draw = ImageDraw.Draw(sheet)
+    for i, n in enumerate(names):
+        im = Image.open(os.path.join(dirpath, n))
+        im = ImageOps.exif_transpose(im) or im
+        im = im.convert("RGB")
+        im.thumbnail((cell - 8, cell - 8), Image.LANCZOS)
+        x = (i % cols) * cell + (cell - im.size[0]) // 2
+        y = (i // cols) * (cell + label_h) + (cell - im.size[1]) // 2
+        sheet.paste(im, (x, y))
+        if font is not None:
+            draw.text(((i % cols) * cell + 4, (i // cols) * (cell + label_h) + cell + 2),
+                      n[:28], font=font, fill=(31, 35, 41))
+    d = os.path.dirname(out_path)
+    if d and not os.path.isdir(d):
+        os.makedirs(d)
+    sheet.save(out_path, "JPEG", quality=80, progressive=True)
+    return 0, [u"✓ 接触表 %s（%d 张，%d×%d）"
+               % (out_path, len(names), sheet.size[0], sheet.size[1])]
+
+
+# --------------------------------------------------------------------------
+# image-manifest.tsv（E31）：图片的唯一清单，check_site 靠它交叉断言
+# --------------------------------------------------------------------------
+def manifest_rows():
+    rows = []
+    for base, _dirs, files in os.walk(IMG):
+        for f in sorted(files):
+            if not f.lower().endswith(MANIFEST_EXT):
+                continue
+            p = os.path.join(base, f)
+            rel = os.path.relpath(p, ROOT).replace("\\", "/")
+            try:
+                im = Image.open(p)
+                if f.lower().endswith(".ico"):
+                    w, h = sorted(im.ico.sizes())[-1]
+                else:
+                    w, h = im.size
+            except Exception:
+                continue
+            rows.append((rel, w, h, os.path.getsize(p)))
+    return sorted(rows)
+
+
+def render_manifest():
+    lines = [u"path\twidth\theight\tbytes"]
+    for rel, w, h, size in manifest_rows():
+        lines.append(u"%s\t%d\t%d\t%d" % (rel, w, h, size))
+    return (u"\n".join(lines) + u"\n").encode("utf-8")
+
+
 def write_bytes(rel, data):
     path = os.path.join(ROOT, rel)
     d = os.path.dirname(path)
@@ -372,6 +626,10 @@ def generate(report):
             changed += 1
     if refresh_404():
         report.append(u"✓ 刷新 404.html 的 404:ART 块")
+        changed += 1
+    rel = "assets/img/image-manifest.tsv"
+    if write_bytes(rel, render_manifest()):
+        report.append(u"✓ 刷新 %s（%d 项）" % (rel, len(manifest_rows())))
         changed += 1
     return changed
 
@@ -581,6 +839,24 @@ def check(rep):
             rep.fail("image", "404.html", u"体积 %d B 超上限 %d" % (size_b, PAGE_404_CAP))
             ok = False
 
+    # 9) 清单与磁盘逐项一致（E31）：清单是 check_site 交叉断言的依据，它自己先得可信
+    man_path = MANIFEST
+    if not os.path.isfile(man_path):
+        rep.fail("image", "image-manifest.tsv", u"清单不存在")
+        ok = False
+    else:
+        disk = io.open(man_path, "rb").read()
+        want = render_manifest()
+        if disk != want:
+            have = set(disk.decode("utf-8").split("\n"))
+            need = set(want.decode("utf-8").split("\n"))
+            missing = sorted(x for x in need - have if x)[:5]
+            rep.fail("image", "image-manifest.tsv",
+                     u"清单与磁盘不一致（例：%s）" % (u" | ".join(missing) or u"行数不同"))
+            ok = False
+        else:
+            rep.info(u"image-manifest.tsv：%d 项，与磁盘一致" % (len(manifest_rows())))
+
     return ok
 
 
@@ -633,6 +909,83 @@ def main(argv):
     if argv[0] in ("-h", "--help"):
         print(__doc__.strip())
         return 0
+
+    if argv[0] == "--photos":
+        opts = {"cover": None, "crop": u"center", "thumbs": False,
+                "auto_quality": False, "reject_alpha": False}
+        dirpath = slug = None
+        rest = argv[1:]
+        i = 0
+        while i < len(rest):
+            a = rest[i]
+            if a in ("--slug", "--cover", "--crop"):
+                if i + 1 >= len(rest):
+                    print(u"✗ %s 缺参数" % a)
+                    return 2
+                opts[a[2:].replace("-", "_")] = rest[i + 1]
+                i += 2
+                continue
+            if a == "--thumbs":
+                opts["thumbs"] = True
+            elif a == "--auto-quality":
+                opts["auto_quality"] = True
+            elif a == "--reject-alpha":
+                opts["reject_alpha"] = True
+            elif a.startswith("--"):
+                print(u"✗ 未知参数：%s" % a)
+                return 2
+            elif dirpath is None:
+                dirpath = a
+            else:
+                print(u"✗ 只接受一个输入目录")
+                return 2
+            i += 1
+        if not dirpath or not opts.get("slug"):
+            print(u"✗ --photos 需要 <目录> 与 --slug <slug>")
+            return 2
+        if opts["crop"] not in (u"center", u"top", u"bottom"):
+            print(u"✗ --crop 只能是 center / top / bottom")
+            return 2
+        code, lines = process_photos(dirpath, opts["slug"], cover=opts["cover"],
+                                     crop=opts["crop"], thumbs=opts["thumbs"],
+                                     auto_quality=opts["auto_quality"],
+                                     reject_alpha=opts["reject_alpha"])
+        for line in lines:
+            print(line)
+        if code == 0:
+            out = []
+            generate(out)
+            for line in out:
+                print(line)
+            print(u"")
+            print(u"OK 照片已入库；清单已刷新。校验：python tools/make_images.py --check")
+        return code
+
+    if argv[0] == "--contact-sheet":
+        dirpath = out_path = None
+        rest = argv[1:]
+        i = 0
+        while i < len(rest):
+            if rest[i] == "--out":
+                if i + 1 >= len(rest):
+                    print(u"✗ --out 缺参数")
+                    return 2
+                out_path = rest[i + 1]
+                i += 2
+                continue
+            if rest[i].startswith("--"):
+                print(u"✗ 未知参数：%s" % rest[i])
+                return 2
+            dirpath = rest[i]
+            i += 1
+        if not dirpath or not out_path:
+            print(u"✗ --contact-sheet 需要 <目录> 与 --out <文件>")
+            return 2
+        code, lines = contact_sheet(dirpath, out_path)
+        for line in lines:
+            print(line)
+        return code
+
     print(u"未知参数：%s\n" % argv[0])
     print(__doc__.strip())
     return 2
