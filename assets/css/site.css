@@ -9,7 +9,7 @@
    断点只有两个：640px（卡片两列）、960px（桌面页头/导航、Hero 横排、卡片四列）。
    768/1280 只是验收测试宽度，不是断点。
 
-   ---- class 登记表（封闭清单 = 附录 B；未登记的 class 由 check_site S19 报 WARN）----
+   ---- class 登记表（BEGIN）----
    骨架/页头/页脚：
      wrap skip-link site-head head-inner brand brand-mark brand-text brand-name
      brand-sub nav-toggle bars site-nav nav-list nav-scrim pagehead site-foot
@@ -22,9 +22,14 @@
    公告：  notice notice-meta notice-body
    活动：  activity activity-cover activity-meta gallery
    团队：  team-grid member avatar role
-   通用：  chip tip table-scroll hint tbl timeline ph
-   状态类：nav-open（body，唯一由 JS 控制的类）
-   404 自包含样式类不登记在本表内：box emblem girl btn nav（§3.11，404 不引用本文件）
+   通用：  btn btn-primary btn-ghost chip tip table-scroll hint tbl timeline ph
+   状态类：nav-open
+   ---- class 登记表（END）----
+   （上面这张表由 check_site S19 解析：用了表外的 class 只报 WARN。BEGIN/END 两行
+     是机器标记，删掉会让 S19 跳过检查。
+     与附录 B 的两处差异：附录 B 漏了 §2.4.8 定义的 btn / btn-primary / btn-ghost，
+     而页面确实在用——按"清单必须与事实一致"补入。404 的自包含类
+     （box emblem girl btn nav）不进本表，S19 也已把 404.html 排除在外。）
    ========================================================================== */
 
 /* ===== 1. 设计变量层（冻结：与内部工具同名，改名即违反 S16） ===== */
