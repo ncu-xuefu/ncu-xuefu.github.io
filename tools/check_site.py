@@ -46,6 +46,8 @@ RULE_TITLES = {    "S1": u"页面存在",
     "S3": u"零外链",
     "S4": u"引用存在 + 大小写",
     "S7": u"编码",
+    "S11": u"img 五属性",
+    "S12": u"图片与清单一致",
     "S20": u"密钥/口令扫描",
 }
 
@@ -372,6 +374,120 @@ def s20_scan_credentials(rep):
 
 
 # --------------------------------------------------------------------------
+# S11 —— 图片五属性（E26 的姊妹项：分辨率与懒加载都要在源码里看得见）
+# --------------------------------------------------------------------------
+IMG_RE = re.compile(r"<img\b[^>]*>", re.I)
+ATTR_ONE_RE = re.compile(r'([a-zA-Z-]+)\s*=\s*"([^"]*)"')
+
+# loading="eager" 的白名单：只有这两个"首屏图"可以不等懒加载（§6.1-S11）
+EAGER_CLASSES = ("brand-mark", "hero-mascot")
+
+# 只要求"四属性"的例外：这两个 <img> 躺在逐字节冻结的 COMMON 块里（§3.1 的字面量
+# 只给了 src/width/height/alt），而附录 E-3 明令 COMMON/SYNC 模板不得改。
+# 计划书里真正有验收判据的是 R4（alt + width + height）与 P3（首屏外 lazy）——
+# 这两条它们都满足；decoding 属方案自加的收紧项，冲突时让位于冻结块。
+# 详见台账的 Ruling（T18）。
+FROZEN_BLOCK_IMGS = ("assets/img/logo-emblem-120.png", "assets/img/logo-emblem-64.png")
+
+
+def parse_attrs(tag):
+    return dict((k.lower(), v) for k, v in ATTR_ONE_RE.findall(tag))
+
+
+def s11_img_attrs(rep):
+    # 只查 7 个页面：404 的两张图是 data-URI **内联**的（E6），
+    # 没有网络请求，lazy/async 无意义；而 §3.11 是逐字冻结块，不得为它改 HTML。
+    for page in [p for p in MAIN_PAGES if exists_exact_case(p)]:
+        text = strip_data_payloads(read_text(os.path.join(ROOT, page)))
+        for m in IMG_RE.finditer(text):
+            attrs = parse_attrs(m.group(0))
+            where = u"%s:%d" % (page, line_of(text, m.start()))
+            needed = ["src", "alt", "width", "height"]
+            if attrs.get("src", u"") not in FROZEN_BLOCK_IMGS:
+                needed += ["loading", "decoding"]
+            for need in needed:
+                if need not in attrs:
+                    rep.fail("S11", where, u"<img> 缺属性 %s" % need)
+            loading = attrs.get("loading", u"")
+            classes = attrs.get("class", u"").split()
+            if loading == "eager":
+                if not any(c in classes for c in EAGER_CLASSES):
+                    rep.fail("S11", where,
+                             u'loading="eager" 只允许 .brand-mark / .hero-mascot（R4/P3）')
+            elif loading and loading != "lazy":
+                rep.fail("S11", where, u'loading 只能 "lazy"，首屏白名单内才可 "eager"'
+                         u'（收到 "%s"）' % loading)
+            dec = attrs.get("decoding")
+            if dec is not None and dec != "async":
+                rep.fail("S11", where, u'decoding 应为 "async"，收到 "%s"' % dec)
+
+
+# --------------------------------------------------------------------------
+# S12 —— 图片与清单一致（E31）
+# --------------------------------------------------------------------------
+MANIFEST_REL = "assets/img/image-manifest.tsv"
+
+
+def load_manifest():
+    path = os.path.join(ROOT, MANIFEST_REL.replace("/", os.sep))
+    if not os.path.isfile(path):
+        return None
+    out = {}
+    lines = read_text(path).split(u"\n")
+    for line in lines[1:]:
+        parts = line.split(u"\t")
+        if len(parts) != 4:
+            continue
+        try:
+            out[parts[0]] = (int(parts[1]), int(parts[2]), int(parts[3]))
+        except ValueError:
+            continue
+    return out
+
+
+def byte_cap(rel):
+    u"""单图体积上限（§1.2：任何图 ≤300 KB；活动封面 ≤150 KB；OG ≤200 KB）。"""
+    if rel.endswith("og-cover.png"):
+        return 200 * 1024
+    if "/activities/" in rel and os.path.basename(rel).startswith("cover-"):
+        return 150 * 1024
+    return 300 * 1024
+
+
+def s12_img_manifest(rep):
+    man = load_manifest()
+    if man is None:
+        rep.warn("S12", MANIFEST_REL, u"清单不存在，跳过图片交叉断言（先跑 make_images.py）")
+        return
+    for page in [p for p in MAIN_PAGES if exists_exact_case(p)]:
+        text = strip_data_payloads(read_text(os.path.join(ROOT, page)))
+        for m in IMG_RE.finditer(text):
+            attrs = parse_attrs(m.group(0))
+            src = attrs.get("src", u"")
+            where = u"%s:%d" % (page, line_of(text, m.start()))
+            if not src or src.startswith("data:"):
+                continue
+            if src not in man:
+                rep.fail("S12", where, u"src 不在图片清单内：%s" % src)
+                continue
+            fw, fh, fbytes = man[src]
+            try:
+                aw, ah = int(attrs["width"]), int(attrs["height"])
+            except (KeyError, ValueError):
+                continue          # 属性缺失/非数字已由 S11 报过，此处不重复刷屏
+            if ah and fh and abs(aw / float(ah) - fw / float(fh)) > 0.01:
+                rep.fail("S12", where,
+                         u"属性宽高比与文件不符（属性 %d×%d / 文件 %d×%d）" % (aw, ah, fw, fh))
+            # §5.4 "只缩不放"：显示尺寸不得大于文件自然尺寸
+            if aw > fw or ah > fh:
+                rep.fail("S12", where,
+                         u"放大引用（属性 %d×%d > 文件 %d×%d）" % (aw, ah, fw, fh))
+            cap = byte_cap(src)
+            if fbytes > cap:
+                rep.fail("S12", src, u"体积 %d B 超上限 %d" % (fbytes, cap))
+
+
+# --------------------------------------------------------------------------
 # 主流程
 # --------------------------------------------------------------------------
 RULES = [
@@ -380,6 +496,8 @@ RULES = [
     ("S3", s3_no_external),
     ("S4", s4_refs_exist),
     ("S7", s7_encoding),
+    ("S11", s11_img_attrs),
+    ("S12", s12_img_manifest),
     ("S20", s20_scan_credentials),
 ]
 
