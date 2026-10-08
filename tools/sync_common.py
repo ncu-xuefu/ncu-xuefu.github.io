@@ -21,6 +21,13 @@ u"""sync_common.py —— 7 页公共块一致性（检查 / 修复 / 缓存串�
     SYNC:SERVICES-CARDS   index.html  → services.html、about.html
     SYNC:OFFICE-HOURS     services.html → index.html、contact.html
 
+关于缩进（一个必须处理的事实）
+------------------------------
+同一个 SYNC 块在不同页面里落在**不同嵌套深度**（index 里 4 空格、services 里 6 空格、
+contact 里 8 空格）。若按"字面逐字节"比较，块体自带的行缩进永远对不上，单源机制当场失效。
+因此本工具的口径是：**比较前先去掉块体每行的共同最小缩进；写回时按目标处的缩进重新缩排**。
+即"除公共缩进外逐字节相同"——语义与空白都受控，唯独缩进跟随所在位置。
+
 用法
 ----
     python tools/sync_common.py --check           # 只读比较（默认即 --check）
@@ -77,18 +84,44 @@ def write_text(path, text):
 
 
 def block_span(text, name):
-    u"""返回 (start, end, body)：BEGIN 标记开头 → END 标记末尾，body 是两标记之间的内容。"""
-    pattern = (r"<!-- " + re.escape(name) + r" BEGIN -->\n(.*?)\n<!-- "
-               + re.escape(name) + r" END -->")
+    u"""返回 (start, end, indent, body)。
+
+    标记可能带前导缩进（SYNC 块嵌在 section 里），所以 BEGIN 前用 [ \\t]* 收掉，
+    END 前同样——只捕获块体本身与 BEGIN 的缩进。
+    """
+    pattern = (r"([ \t]*)<!-- " + re.escape(name) + r" BEGIN -->\n"
+               r"(.*?)\n"
+               r"[ \t]*<!-- " + re.escape(name) + r" END -->")
     m = re.search(pattern, text, re.S)
     if not m:
         return None
-    return (m.start(), m.end(), m.group(1))
+    return (m.start(), m.end(), m.group(1), m.group(2))
+
+
+def dedent(body):
+    u"""去掉每行共同的最小前导空白（纯空行不参与计算，也不改动）。"""
+    lines = body.split(u"\n")
+    widths = [len(l) - len(l.lstrip(u" \t")) for l in lines if l.strip()]
+    if not widths:
+        return body
+    cut = min(widths)
+    if cut == 0:
+        return body
+    return u"\n".join(l[cut:] if l.strip() else l for l in lines)
+
+
+def reindent(body, indent):
+    u"""把块体每行按目标处的缩进重新缩排（空行不补空白）。"""
+    return u"\n".join((indent + l) if l.strip() else l for l in body.split(u"\n"))
 
 
 def normalize_nav(body):
-    u"""比较前抹掉 aria-current —— 它必须逐页不同，否则真源没法共用（E19）。"""
-    return body.replace(ARIA, u"")
+    u"""NAV 归一口径：去缩进 + 抹掉 aria-current（它必须逐页不同，否则真源没法共用，E19）。"""
+    return dedent(body).replace(ARIA, u"")
+
+
+def canonical(body):
+    return dedent(body)
 
 
 def attach_aria(body, page):
@@ -98,13 +131,6 @@ def attach_aria(body, page):
     if old not in body:
         raise ValueError(u"导航里没有指向 %s 的链接" % page)
     return body.replace(old, u'<a href="%s"%s>' % (page, ARIA), 1)
-
-
-def block_body_for(text, name, page):
-    span = block_span(text, name)
-    if span is None:
-        return None
-    return span[2]
 
 
 def first_diff(target_body, source_body):
@@ -139,8 +165,8 @@ def cmd_check():
             print(u"✗ %s：源文件 %s 不存在" % (name, source))
             problems += 1
             continue
-        sbody = block_body_for(read_text(spath), name, source)
-        if sbody is None:
+        sspan = block_span(read_text(spath), name)
+        if sspan is None:
             # 「源里还没有这个块」≠「目标与源不一致」。
             # 施工期的不完整按 WARN 处理（E3 原则：施工期允许的不完整 = WARN；
             # 上线后必须成立的 = FAIL）。源一旦建起该块，本项立刻转为强制。
@@ -148,7 +174,7 @@ def cmd_check():
                   % (name, source))
             pending += 1
             continue
-        expect = normalize_nav(sbody) if is_nav else sbody
+        expect = normalize_nav(sspan[3]) if is_nav else canonical(sspan[3])
 
         for target in targets:
             tpath = os.path.join(ROOT, target)
@@ -157,27 +183,26 @@ def cmd_check():
                 problems += 1
                 continue
             ttext = read_text(tpath)
-            span = block_span(ttext, name)
-            if span is None:
+            tspan = block_span(ttext, name)
+            if tspan is None:
                 print(u"✗ %s：文件里找不到块 %s" % (target, name))
                 problems += 1
                 continue
-            tbody = span[2]
-            cmp_body = normalize_nav(tbody) if is_nav else tbody
+            got = normalize_nav(tspan[3]) if is_nav else canonical(tspan[3])
             checked += 1
 
-            if cmp_body != expect:
-                diff = first_diff(cmp_body, expect)
-                line_no = ttext.count(u"\n", 0, span[0]) + 1 + (diff[0] if diff else 0)
+            if got != expect:
+                diff = first_diff(got, expect)
+                line_no = ttext.count(u"\n", 0, tspan[0]) + 2 + (diff[0] if diff else 0)
                 print(u"✗ %s / %s 与源不一致（首个差异行 %d：目标「%s」/ 源「%s」）"
                       % (target, name, line_no, snippet(diff[1]), snippet(diff[2])))
                 problems += 1
                 continue
 
             if is_nav:
-                hits = tbody.count(u'aria-current="page"')
+                hits = tspan[3].count(u'aria-current="page"')
                 want = u'<a href="%s"%s>' % (target, ARIA)
-                if hits != 1 or want not in tbody:
+                if hits != 1 or want not in tspan[3]:
                     print(u"✗ %s / %s：aria-current 应恰好一处且落在本页条目上（当前 %d 处）"
                           % (target, name, hits))
                     problems += 1
@@ -202,7 +227,7 @@ def cmd_check():
 # --fix
 # --------------------------------------------------------------------------
 def cmd_fix():
-    # ① 先把所有源块的 body 快照下来。
+    # ① 先把所有源块的块体快照下来。
     #    必须快照：SYNC:OFFICE-HOURS 的源是 services.html，而它又是 COMMON 块的目标——
     #    边读边写会让后读的块拿到被改过一半的文件。
     snapshot = {}
@@ -211,12 +236,12 @@ def cmd_fix():
         if not os.path.isfile(spath):
             print(u"✗ %s：源文件 %s 不存在" % (name, source))
             return 1
-        body = block_body_for(read_text(spath), name, source)
-        if body is None:
+        sspan = block_span(read_text(spath), name)
+        if sspan is None:
             print(u"! %s：源 %s 尚未建立该块，跳过（施工期 WARN；建块后转为强制）"
                   % (name, source))
             continue
-        snapshot[name] = body
+        snapshot[name] = canonical(sspan[3])
 
     # ② 按文件归集要写的块，逐文件重写（保留块外内容原样）。
     pending = {}
@@ -225,8 +250,8 @@ def cmd_fix():
             continue          # 源里尚未建立该块，跳过（与 --check 的 WARN 同一口径）
         body = snapshot[name]
         for target in targets:
-            want = attach_aria(body, target) if is_nav else body
-            pending.setdefault(target, []).append((name, want))
+            pending.setdefault(target, []).append(
+                (name, attach_aria(body, target) if is_nav else body))
 
     changed_files = 0
     changed_blocks = 0
@@ -238,16 +263,16 @@ def cmd_fix():
         text = read_text(path)
         original = text
         for name, want in wanted:
-            span = block_span(text, name)
-            if span is None:
+            tspan = block_span(text, name)
+            if tspan is None:
                 print(u"✗ %s：文件里找不到块 %s，跳过" % (target, name))
                 continue
-            current = span[2]
-            replacement = (u"<!-- " + name + u" BEGIN -->\n" + want
-                           + u"\n<!-- " + name + u" END -->")
-            if text[span[0]:span[1]] == replacement:
+            replacement = (tspan[2] + u"<!-- " + name + u" BEGIN -->\n"
+                           + reindent(want, tspan[2])
+                           + u"\n" + tspan[2] + u"<!-- " + name + u" END -->")
+            if text[tspan[0]:tspan[1]] == replacement:
                 continue
-            text = text[:span[0]] + replacement + text[span[1]:]
+            text = text[:tspan[0]] + replacement + text[tspan[1]:]
             changed_blocks += 1
             print(u"✓ %s / %s 已同步" % (target, name))
         if text != original:
