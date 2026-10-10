@@ -1,0 +1,224 @@
+/* web/assets/css/app.css -- tokens, layers, layout, components.
+   E6 colour sourcing: 8 colours are shared with the portal, 3 are project-owned (sampled from
+   有脸星星.png). --sky-* and the flame gradient keep the portal's flame recipe. */
+:root{
+  color-scheme: light;                 /* 红线：防安卓/微信强制深色反色 */
+  /* 门户同源 8 色 */
+  --cream:#FEDF8D;  --cream-soft:#FFF6DD;  --accent:#2E5EA3;  --accent-soft:#EAEFF7;
+  --ice:#DEEAF6;    --ink:#1F2329;         --line:#E3E6EA;     --bg:#F6F7F9;
+  /* 项目自有（有脸星星.png 采样，E6） */
+  --coral:#FE926D;  --brown:#794D44;       --star:#FFF6DD;
+  --gold:#E8A93C;   --gold-soft:#FFE9A6;
+  /* 夜空 */
+  --sky-top:#FFEFC4; --sky-mid:#F7C89A; --sky-deep:#2E4A7D; --sky-ink:#22304F;
+  --flame:linear-gradient(180deg,#D92419,#DC8C0F,#E3C238);
+  /* injected from web/assets/js/sprites.js (single source of truth for hat geometry) */
+  --hat-x:50%; --hat-y:8%; --hat-w:38%; --hat-rot:0deg; --hat-a:1.35; --hat-h:0px;
+}
+
+*{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html,body{ margin:0; padding:0; height:100%; overflow:hidden; }
+body{
+  background:#22304F; color:var(--cream-soft);
+  font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+  font-size:16px; line-height:1.5;
+  -webkit-text-size-adjust:100%; overscroll-behavior:none;
+}
+button{ font:inherit; color:inherit; border:0; background:none; cursor:pointer; }
+img{ -webkit-user-drag:none; user-select:none; }
+
+/* ── layers (see ledger: canvas sits UNDER #stage so the compose dialog reads cleanly) ── */
+#app{
+  position:fixed; inset:0; height:100dvh;
+  padding-bottom:env(safe-area-inset-bottom);
+  overflow:hidden;
+}
+#sky{ position:absolute; inset:0; z-index:0;
+  background:linear-gradient(180deg,var(--sky-top) 0%,var(--sky-mid) 38%,var(--sky-deep) 78%,var(--sky-ink) 100%);
+}
+#fx{ position:fixed; inset:0; z-index:5; pointer-events:none; }
+#stage{ position:absolute; inset:0; z-index:10; transform:translate3d(0,0,0); will-change:transform; }
+#fx-layer{ position:absolute; inset:0; z-index:20; pointer-events:none; }
+#ui-top{ position:absolute; top:calc(env(safe-area-inset-top) + 10px); left:0; right:0; z-index:40;
+  display:flex; align-items:center; justify-content:space-between; padding:0 12px; pointer-events:none; }
+#ui-top > *{ pointer-events:auto; }
+
+/* ── scenes: never display:none (E29) ── */
+.scene{ position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  transition:opacity .42s ease, visibility .42s; }
+.scene.off{ opacity:0; visibility:hidden; pointer-events:none; }
+
+/* ── sky decoration ── */
+.stars{ position:absolute; inset:0; }
+.stars i{ position:absolute; width:3px; height:3px; border-radius:50%; background:var(--star);
+  box-shadow:0 0 6px rgba(255,246,221,.9); opacity:.75; animation:twinkle 4s ease-in-out infinite; }
+.year-egg{ position:absolute; left:0; right:0; top:52%; text-align:center;
+  font-size:13px; letter-spacing:.32em; color:rgba(255,246,221,.5); animation:yearFloat 8s linear infinite; }
+.deco{ position:absolute; left:0; right:0; top:0; height:40%; }   /* 计划书 §4.6: 只放上方 40% */
+.deco i{ position:absolute; border-radius:50%; background:rgba(255,246,221,.35); }
+
+/* ── gate ── */
+#scene-gate{ gap:2.4vh; cursor:pointer; }
+.emblem{ display:block; }
+.emblem-big{ width:min(46vw,196px); height:auto; animation:breathe 3.4s ease-in-out infinite; }
+.gate-hint{ margin:0; font-size:19px; letter-spacing:.16em; color:var(--cream-soft);
+  text-shadow:0 2px 10px rgba(34,48,79,.5); animation:hintPulse 2.1s ease-in-out infinite; }
+.gate-brand{ margin:0; font-size:12px; letter-spacing:.08em; color:rgba(255,246,221,.62); }
+
+/* ── intro ── */
+#scene-intro{ justify-content:flex-start; padding-top:8vh; }
+.intro-svg{ width:96vw; max-width:460px; height:auto; }   /* viewBox 400 宽（原 360），同比例放大 */
+.intro-sub{ margin:1.2vh 0 0; font-size:15px; letter-spacing:.2em; color:var(--cream-soft); opacity:0; }
+
+/* ── wishScene ── */
+/* The stage is a ROW: girl | cake | boy, feet on one line, cake in front and between them
+   (计划书 §7.1 蛋糕居中、女左男右). The cake overlaps the lower half so the faces and hats stay
+   clear of it -- and clear of the compose dialog, which covers the bottom 40%. */
+#scene-wish{ justify-content:flex-end; padding-bottom:43vh; }
+.wish-stage{ position:relative; width:100%; display:flex; align-items:flex-end; justify-content:center; }
+.figures{ position:relative; display:flex; align-items:flex-end; justify-content:center; gap:1vw; }
+.figure{ position:relative; }
+.figure .sprite{ display:block; width:auto; }
+.fig-girl .sprite{ height:26vh; }
+.fig-boy  .sprite{ height:32.5vh; }
+.hat{ position:absolute; left:var(--hat-x); width:var(--hat-w);
+  /* height MUST come from the SVG's own viewBox ratio (100:135 = 1.35). Writing
+     calc(var(--hat-w) * var(--hat-a)) looks equivalent but is not: a percentage in `height`
+     resolves against the containing block's HEIGHT, so --hat-w would silently mean 36% of 275px. */
+  height:auto; aspect-ratio:100 / 135;
+  top:calc(var(--hat-y) - var(--hat-h));
+  transform:translateX(-50%) rotate(var(--hat-rot)); transform-origin:50% 100%;
+  visibility:hidden; }
+/* 蛋糕是这一行里的流内元素，站在两人中间：左右各留**等量**负外边距，所以两边被压住的宽度天然相等。
+   （旧版是绝对定位居中；女孩比男孩宽得多，"行的中心"并不在两人中间，蛋糕就偏压到男孩身上了。） */
+.cake-svg{ position:relative; z-index:2; align-self:flex-end;
+  width:min(38vw,150px); height:auto;
+  margin:0 calc(-1 * min(11vw,44px)); margin-bottom:-1.5vh; }
+.warm-light{ position:absolute; inset:auto 0 0 0; height:46%; pointer-events:none;
+  background:radial-gradient(60% 80% at 50% 100%, rgba(255,233,166,.55), rgba(255,233,166,0) 70%); }
+.hat-sparkles{ position:absolute; inset:0; pointer-events:none; }
+.hat-sparkles i{ position:absolute; width:6px; height:6px; border-radius:50%; background:var(--gold-soft);
+  box-shadow:0 0 8px rgba(255,233,166,.95); opacity:0; }
+
+/* ── compose dialog ── */
+/* #scene-compose must outrank the cake: .cake-svg carries z-index:2, which otherwise escapes
+   #scene-wish (no stacking context of its own) and swallows taps meant for the textarea. */
+#scene-compose{ justify-content:flex-end; z-index:5; }
+.dialog{ width:100%; background:linear-gradient(180deg,rgba(255,246,221,.97),rgba(255,246,221,.99));
+  border-top-left-radius:22px; border-top-right-radius:22px; padding:16px 16px 14px;
+  box-shadow:0 -8px 30px rgba(34,48,79,.35); transform:translateY(110%); }
+.dialog.in{ transform:translateY(0); }
+.dialog-title{ margin:0 0 10px; font-size:15px; color:var(--brown); text-align:center; }
+#compose-input{ width:100%; min-height:22vh; resize:none; font-size:16px; line-height:1.6;
+  font-family:inherit; color:var(--ink); background:#fff;
+  border:1.5px solid var(--line); border-radius:14px; padding:12px; outline:none; }
+#compose-input:focus{ border-color:var(--coral); }
+.dialog-meta{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin:10px 2px; }
+.name-row{ display:flex; align-items:center; gap:6px; font-size:13px; color:var(--brown); }
+#compose-name{ width:9em; font-size:16px; padding:6px 8px; border:1.5px solid var(--line);
+  border-radius:10px; background:#fff; color:var(--ink); font-family:inherit; }
+.count{ font-size:13px; color:#8a8f96; font-variant-numeric:tabular-nums; }
+.count.over{ color:#D92419; font-weight:600; }
+.btn-primary{ display:block; width:100%; padding:13px; border-radius:999px; font-size:17px; font-weight:600;
+  color:#fff; background:linear-gradient(180deg,var(--coral),#E8674A);
+  box-shadow:0 6px 16px rgba(232,103,74,.35); }
+.btn-primary:disabled{ opacity:.45; box-shadow:none; }
+.btn-ghost{ padding:10px 16px; border-radius:999px; font-size:14px; color:var(--cream-soft);
+  background:rgba(255,246,221,.16); border:1.5px solid rgba(255,246,221,.4); }
+.pill{ padding:8px 14px; border-radius:999px; font-size:14px; background:rgba(34,48,79,.4);
+  color:var(--cream-soft); border:1.5px solid rgba(255,246,221,.45); }
+.icon-btn{ width:44px; height:44px; border-radius:50%; font-size:19px; color:var(--cream-soft);
+  background:rgba(34,48,79,.4); border:1.5px solid rgba(255,246,221,.45); }
+.pill.off,.icon-btn.off{ opacity:0; visibility:hidden; pointer-events:none; }
+#btn-skip{ min-height:44px; display:flex; align-items:center; }
+#btn-sound .sound-off{ display:none; }
+#btn-sound.muted .sound-on{ display:none; }
+#btn-sound.muted .sound-off{ display:inline; }
+#btn-sound.dead{ opacity:.45; pointer-events:none; }
+
+/* ── handoff FX ── */
+.rise-note{ position:absolute; left:50%; bottom:26vh; transform:translate(-50%,0);
+  font-family:"Kaiti SC","STKaiti","KaiTi",serif; font-size:22px; color:#fff; white-space:nowrap;
+  text-shadow:0 0 10px rgba(255,201,110,.95), 0 0 3px rgba(255,255,255,.9);
+  opacity:0; max-width:80vw; overflow:hidden; text-overflow:ellipsis; }
+.rise-trail{ position:absolute; left:50%; bottom:24vh; width:5px; height:26vh; opacity:0;
+  transform:translateX(-50%); border-radius:999px;
+  background:linear-gradient(180deg, rgba(255,233,166,0), rgba(255,233,166,.75), rgba(255,233,166,0)); }
+.spark{ position:absolute; border-radius:50%; background:#fff;
+  box-shadow:0 0 12px rgba(255,233,166,1); opacity:0; }
+
+/* ── wall ── */
+#scene-wall{ justify-content:flex-start; }
+.wall-head{ position:absolute; top:calc(env(safe-area-inset-top) + 8px); left:0; right:0;
+  display:flex; align-items:center; justify-content:center; gap:8px; }
+.emblem-sm{ width:28px; height:28px; }
+.wall-title{ margin:0; font-size:15px; font-weight:600; letter-spacing:.06em; color:#5A4636;
+  text-shadow:0 1px 0 rgba(255,255,255,.55); }   /* readable against the pale sky */
+#wall-tracks{ position:absolute; left:0; right:0; top:74px; bottom:132px;
+  display:flex; flex-direction:column; justify-content:space-around; overflow:hidden; }
+.track{ position:relative; white-space:nowrap; will-change:transform; transform:translate3d(0,0,0); }
+.gap{ display:inline-block; height:1px; vertical-align:middle; }   /* stream spacer, keeps the belt full */
+.card{ display:inline-block; max-width:76vw; margin-right:48px; padding:9px 16px; border-radius:999px;
+  background:rgba(255,246,221,.92); border:1.5px solid rgba(121,77,68,.18); color:var(--ink);
+  font-size:14px; overflow:hidden; text-overflow:ellipsis; vertical-align:middle;
+  box-shadow:0 2px 10px rgba(34,48,79,.14); }
+.card .who{ color:var(--brown); margin-right:6px; opacity:.85; }
+.card.mine{ border-color:var(--gold); box-shadow:0 0 0 2px rgba(232,169,60,.42), 0 2px 10px rgba(34,48,79,.16); }
+.card .me{ display:inline-block; margin-left:6px; padding:0 5px; border-radius:6px; font-size:11px;
+  background:var(--gold); color:#fff; vertical-align:1px; }
+.card.fresh{ animation:cardIn .5s ease-out; }
+#wall-tracks.paused .card.fresh{ animation-play-state:paused; }
+.wall-foot{ position:absolute; left:0; right:0; bottom:calc(env(safe-area-inset-bottom) + 14px);
+  display:flex; gap:12px; align-items:center; justify-content:center; }
+.share-wrap{ position:absolute; left:12px; right:12px; bottom:calc(env(safe-area-inset-bottom) + 66px);
+  z-index:56; background:rgba(34,48,79,.92); border:1.5px solid rgba(255,246,221,.3);
+  border-radius:18px; padding:10px; display:flex; flex-direction:column; align-items:center; gap:8px;
+  max-height:52vh; }
+.share-wrap.off{ opacity:0; visibility:hidden; pointer-events:none; }
+.share-head{ width:100%; display:flex; align-items:center; justify-content:space-between;
+  font-size:13px; color:var(--cream-soft); padding:0 2px; }
+.share-close{ width:32px; height:32px; font-size:20px; line-height:1; color:var(--cream-soft); }
+#share-img{ max-width:86%; max-height:31vh; border-radius:10px; background:#FFF6DD; }
+.share-hint{ margin:0; font-size:12px; color:rgba(255,246,221,.75); }
+.share-hint.bad{ color:#FFC9A6; }
+
+/* ── modals / pause card / toast ── */
+.modal{ position:absolute; inset:0; z-index:60; display:flex; align-items:center; justify-content:center;
+  background:rgba(34,48,79,.5); padding:24px; }
+.modal.off{ opacity:0; visibility:hidden; pointer-events:none; }
+#admin-modal{ z-index:70; }
+/* the wall modal sits high so the cake it just handed over stays visible underneath it */
+#wall-modal{ align-items:flex-start; padding-top:9vh; }
+.modal-card{ width:100%; max-width:340px; background:var(--cream-soft); color:var(--ink);
+  border-radius:20px; padding:20px; text-align:center; box-shadow:0 16px 40px rgba(0,0,0,.3);
+  display:flex; flex-direction:column; gap:12px; }
+.modal-text{ margin:0; font-size:16px; color:var(--brown); }
+.pause-card{ text-align:left; }
+.pause-name{ margin:0; font-size:14px; color:var(--brown); }
+.pause-time{ margin:0; font-size:12px; color:#8a8f96; }
+.pause-text{ margin:0; font-size:17px; line-height:1.7; word-break:break-word; }
+#admin-token{ font-size:16px; padding:10px; border-radius:12px; border:1.5px solid var(--line); }
+.admin-actions{ display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+.admin-actions .btn-primary{ width:auto; padding:10px 18px; font-size:15px; }
+.admin-actions .btn-ghost{ color:var(--brown); background:rgba(121,77,68,.1); border-color:rgba(121,77,68,.3); }
+.admin-msg{ margin:0; font-size:13px; min-height:1.2em; color:#D92419; }
+.modal-card .btn-ghost{ color:var(--brown); background:rgba(121,77,68,.1); border-color:rgba(121,77,68,.3); }
+.toast{ position:absolute; left:50%; bottom:16vh; z-index:80; transform:translateX(-50%);
+  max-width:86vw; padding:10px 18px; border-radius:999px; font-size:14px; text-align:center;
+  background:rgba(34,48,79,.9); color:var(--cream-soft); border:1.5px solid rgba(255,246,221,.35);
+  transition:opacity .3s ease, visibility .3s; }
+.toast.off{ opacity:0; visibility:hidden; }
+
+@media (prefers-reduced-motion: reduce){
+  .emblem-big,.gate-hint,.stars i,.year-egg{ animation:none; }
+}
+
+/* ── pause card actions + admin undo bar ── */
+.pause-actions{ display:flex; gap:10px; justify-content:flex-end; }
+.pause-actions .btn-ghost.off{ opacity:0; visibility:hidden; pointer-events:none; }
+.undo-bar{ position:absolute; left:12px; right:12px; bottom:calc(env(safe-area-inset-bottom) + 66px);
+  z-index:55; display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding:10px 14px; border-radius:14px; font-size:13px; color:var(--cream-soft);
+  background:rgba(34,48,79,.9); border:1.5px solid rgba(255,246,221,.3); }
+.undo-bar.off{ opacity:0; visibility:hidden; pointer-events:none; }
+.undo-bar .btn-ghost{ padding:7px 14px; font-size:13px; }

@@ -1,0 +1,49 @@
+/* web/assets/css/scenes.css -- loops and one-shot keyframes. Only transform/opacity animate
+   (E30: no filter/box-shadow animation, no width animation). */
+
+/* ── ambient ── */
+@keyframes twinkle{ 0%,100%{ opacity:.35; transform:scale(.85); } 50%{ opacity:.95; transform:scale(1.15); } }
+@keyframes yearFloat{ 0%{ transform:translateY(14px); opacity:0; } 18%{ opacity:.75; } 78%{ opacity:.6; }
+  100%{ transform:translateY(-46px); opacity:0; } }
+@keyframes breathe{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.045); } }
+@keyframes hintPulse{ 0%,100%{ opacity:.78; } 50%{ opacity:1; } }
+
+/* ── intro ── */
+#scene-intro .num{ transform-box:fill-box; transform-origin:50% 50%; }
+#scene-intro .crown{ transform-box:fill-box; transform-origin:50% 100%; }
+.twenty.breathing .num{ animation:twentyBreath 2.4s ease-in-out infinite alternate; }
+.twenty.breathing .crown{ animation:twentyBreath 2.4s ease-in-out infinite alternate; }
+@keyframes twentyBreath{ from{ transform:scale(1); } to{ transform:scale(1.04); } }
+/* 气球升空：8 个交错 120ms、2600ms linear（计划书 §3.2 / 实现方案 §7.2）。
+   transform-box:fill-box makes the % translate relative to the balloon itself; -950% carries it out
+   of the top of the viewBox, i.e. off the visible area regardless of how the SVG is scaled. */
+.balloon{ transform-box:fill-box; opacity:0; animation:balloonRise 2.6s linear both; }
+.b1{ animation-delay:.90s; } .b2{ animation-delay:1.02s; } .b3{ animation-delay:1.14s; } .b4{ animation-delay:1.26s; }
+.b5{ animation-delay:1.38s; } .b6{ animation-delay:1.50s; } .b7{ animation-delay:1.62s; } .b8{ animation-delay:1.74s; }
+@keyframes balloonRise{
+  0%{ transform:translateY(10%); opacity:0; }
+  12%{ opacity:.95; }
+  80%{ opacity:.9; }
+  100%{ transform:translateY(-950%); opacity:0; }
+}
+.intro-sub.on{ animation:subIn .7s ease-out forwards; }
+@keyframes subIn{ from{ opacity:0; transform:translateY(12px); } to{ opacity:1; transform:translateY(0); } }
+
+/* ── wishScene: candles + warm light + 许愿呼吸 ── */
+.flame{ transform-box:fill-box; transform-origin:50% 100%; animation:flicker .9s ease-in-out infinite alternate; }
+.candle:nth-child(2) .flame{ animation-delay:.45s; }       /* 双支错相 450ms */
+@keyframes flicker{
+  from{ transform:scaleY(1) rotate(-.6deg); opacity:.94; }
+  to{ transform:scaleY(1.08) rotate(.6deg); opacity:1; }
+}
+.cake-glow{ animation:glowBreath 2.6s ease-in-out infinite alternate; }
+@keyframes glowBreath{ from{ opacity:.34; } to{ opacity:.56; } }
+.warm-light{ animation:glowBreath 3.4s ease-in-out infinite alternate; }
+.wish-stage.wishing .figure{ animation:wishBreath 3s ease-in-out infinite alternate; }
+@keyframes wishBreath{ from{ transform:scale(1); } to{ transform:scale(1.01); } }
+
+/* ── wall cards ── */
+@keyframes cardIn{ from{ opacity:0; transform:translateX(26px) scale(.94); } to{ opacity:1; transform:none; } }
+
+/* ── lite mode: long shows collapse to short fades (E28) ── */
+.lite .scene{ transition-duration:.4s; }

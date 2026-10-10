@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta name="xf-snapshot" content="1">
+<meta name="description" content="小服的 20 岁祝福墙 -- 收藏版">
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#2E4A7D">
+<title>小服 20 岁生日快乐</title>
+<link rel="icon" href="assets/img/logo-256.png?v=20261009al">
+<link rel="stylesheet" href="assets/css/app.css?v=20261009al">
+<link rel="stylesheet" href="assets/css/scenes.css?v=20261009al">
+</head>
+<body>
+<div id="app">
+
+  <div id="sky" aria-hidden="true">
+    <div class="stars" id="stars"></div>
+    <div class="year-egg" id="year-egg">2006 → 2026</div>
+    <div class="deco" id="deco"></div>
+  </div>
+
+  <div id="stage">
+
+    <!-- ── 0 gate ───────────────────────────────────────────── -->
+    <section id="scene-gate" class="scene" role="button" tabindex="0" aria-label="轻触屏幕 为小服庆生">
+      <img class="emblem emblem-big" src="assets/img/logo-256.png?v=20261009al" alt="学生学习服务中心会徽" draggable="false">
+      <p class="gate-hint">轻触屏幕 为小服庆生</p>
+      <p class="gate-brand">南昌大学教务处学生学习服务中心</p>
+    </section>
+
+    <!-- ── 1 intro ──────────────────────────────────────────── -->
+    <section id="scene-intro" class="scene off" aria-hidden="true">
+      <svg class="intro-svg" viewBox="0 0 400 620" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+        <defs>
+          <pattern id="i-dots" width="16" height="16" patternUnits="userSpaceOnUse">
+            <rect width="16" height="16" fill="#FE926D"></rect>
+            <circle cx="4" cy="4" r="2.1" fill="#FFF6DD"></circle>
+            <circle cx="12" cy="12" r="1.7" fill="#FEDF8D"></circle>
+          </pattern>
+          <pattern id="i-stripe" width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(-38)">
+            <rect width="14" height="14" fill="#FEDF8D"></rect>
+            <rect width="6" height="14" fill="#FE926D"></rect>
+          </pattern>
+          <linearGradient id="i-gold" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#FFE9A6"></stop>
+            <stop offset="1" stop-color="#E8A93C"></stop>
+          </linearGradient>
+          <linearGradient id="i-balloon-a" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#FE926D"></stop><stop offset="1" stop-color="#E8674A"></stop>
+          </linearGradient>
+          <linearGradient id="i-balloon-b" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#FEDF8D"></stop><stop offset="1" stop-color="#F2BE55"></stop>
+          </linearGradient>
+          <linearGradient id="i-balloon-c" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#8FB6E4"></stop><stop offset="1" stop-color="#2E5EA3"></stop>
+          </linearGradient>
+        </defs>
+
+        <!-- 气球与放射装饰整体右移 20：画布从 360 加宽到 400 后，这样才仍以 "20th" 为中心 -->
+        <g transform="translate(20,0)">
+          <g class="balloons">
+            <g class="balloon b1"><ellipse cx="46" cy="330" rx="15" ry="19" fill="url(#i-balloon-a)"></ellipse><path d="M46 349 l4 6 h-8 z" fill="#E8674A"></path><path d="M46 355 q6 20 -2 40" stroke="#FFF6DD" stroke-width="1.4" fill="none"></path></g>
+            <g class="balloon b2"><ellipse cx="92" cy="380" rx="13" ry="17" fill="url(#i-balloon-b)"></ellipse><path d="M92 397 l4 6 h-8 z" fill="#F2BE55"></path><path d="M92 403 q-6 18 2 36" stroke="#FFF6DD" stroke-width="1.4" fill="none"></path></g>
+            <g class="balloon b3"><ellipse cx="150" cy="352" rx="14" ry="18" fill="url(#i-balloon-c)"></ellipse><path d="M150 370 l4 6 h-8 z" fill="#2E5EA3"></path><path d="M150 376 q7 19 -1 38" stroke="#FFF6DD" stroke-width="1.4" fill="none"></path></g>
+            <g class="balloon b4"><ellipse cx="212" cy="392" rx="13" ry="17" fill="url(#i-balloon-a)"></ellipse><path d="M212 409 l4 6 h-8 z" fill="#E8674A"></path><path d="M212 415 q-5 17 3 34" stroke="#FFF6DD" stroke-width="1.4" fill="none"></path></g>
+            <g class="balloon b5"><ellipse cx="266" cy="344" rx="15" ry="19" fill="url(#i-balloon-b)"></ellipse><path d="M266 363 l4 6 h-8 z" fill="#F2BE55"></path><path d="M266 369 q6 20 -2 40" stroke="#FFF6DD" stroke-width="1.4" fill="none"></path></g>
+            <g class="balloon b6"><ellipse cx="318" cy="386" rx="13" ry="17" fill="url(#i-balloon-c)"></ellipse><path d="M318 403 l4 6 h-8 z" fill="#2E5EA3"></path><path d="M318 409 q-7 18 1 36" stroke="#FFF6DD" stroke-width="1.4" fill="none"></path></g>
+            <g class="balloon b7"><ellipse cx="70" cy="432" rx="12" ry="16" fill="url(#i-balloon-a)"></ellipse><path d="M70 448 l3 5 h-6 z" fill="#E8674A"></path></g>
+            <g class="balloon b8"><ellipse cx="292" cy="440" rx="12" ry="16" fill="url(#i-balloon-b)"></ellipse><path d="M292 456 l3 5 h-6 z" fill="#F2BE55"></path></g>
+          </g>
+          <g class="rays">
+            <g class="ray r1"><rect x="18" y="196" width="34" height="7" rx="3.5" fill="#FE926D" transform="rotate(-28 35 199)"></rect></g>
+            <g class="ray r2"><rect x="306" y="168" width="34" height="7" rx="3.5" fill="#2E5EA3" transform="rotate(24 323 171)"></rect></g>
+            <g class="ray r3"><path d="M40 268 l5 13 13 5 -13 5 -5 13 -5 -13 -13 -5 13 -5 z" fill="url(#i-gold)" stroke="#794D44" stroke-width="1.6"></path></g>
+            <g class="ray r4"><path d="M322 250 l5 13 13 5 -13 5 -5 13 -5 -13 -13 -5 13 -5 z" fill="url(#i-gold)" stroke="#794D44" stroke-width="1.6"></path></g>
+            <g class="ray r5"><rect x="20" y="392" width="30" height="6" rx="3" fill="#FEDF8D" transform="rotate(22 35 395)"></rect></g>
+            <g class="ray r6"><rect x="310" y="404" width="30" height="6" rx="3" fill="#FE926D" transform="rotate(-18 325 407)"></rect></g>
+            <g class="ray r7"><circle cx="34" cy="330" r="4.5" fill="#FE926D"></circle></g>
+            <g class="ray r8"><circle cx="330" cy="322" r="4.5" fill="#FEDF8D"></circle></g>
+            <g class="ray r9"><circle cx="120" cy="150" r="3.5" fill="#2E5EA3"></circle></g>
+            <g class="ray r10"><circle cx="248" cy="140" r="3.5" fill="#FE926D"></circle></g>
+          </g>
+        </g>
+
+        <!-- 20th：重排过。旧版 t 的横笔是 45 度斜杠、且 t 竖笔与 h 竖笔只隔 20 而笔画宽 13，糊成一团；
+             旧版画布 360 也不够 th 站脚（0 的粗环外沿正好顶到 t 起笔）。 -->
+        <g class="twenty">
+          <g class="num n2">
+            <path d="M40 226 Q40 170 90 170 Q140 170 140 220 Q140 252 90 280 L42 306 L142 306"
+                  fill="none" stroke="#794D44" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"></path>
+            <path d="M40 226 Q40 170 90 170 Q140 170 140 220 Q140 252 90 280 L42 306 L142 306"
+                  fill="none" stroke="url(#i-dots)" stroke-width="27" stroke-linecap="round" stroke-linejoin="round"></path>
+          </g>
+          <g class="num n0">
+            <ellipse cx="230" cy="240" rx="48" ry="64" fill="none" stroke="#794D44" stroke-width="36"></ellipse>
+            <ellipse cx="230" cy="240" rx="48" ry="64" fill="none" stroke="url(#i-stripe)" stroke-width="27"></ellipse>
+          </g>
+          <g class="num nth">
+            <path d="M320 232 L320 306" fill="none" stroke="#794D44" stroke-width="9" stroke-linecap="round"></path>
+            <path d="M310 252 L330 252" fill="none" stroke="#794D44" stroke-width="9" stroke-linecap="round"></path>
+            <path d="M346 220 L346 306" fill="none" stroke="#794D44" stroke-width="9" stroke-linecap="round"></path>
+            <path d="M368 262 L368 306" fill="none" stroke="#794D44" stroke-width="9" stroke-linecap="round"></path>
+            <path d="M346 266 Q357 246 368 266" fill="none" stroke="#794D44" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"></path>
+          </g>
+          <g class="crown">
+            <path d="M192 172 L204 128 L218 154 L230 114 L244 154 L258 128 L270 172 Z"
+                  fill="url(#i-gold)" stroke="#794D44" stroke-width="4" stroke-linejoin="round"></path>
+            <rect x="190" y="168" width="82" height="10" rx="5" fill="url(#i-gold)" stroke="#794D44" stroke-width="3"></rect>
+          </g>
+        </g>
+      </svg>
+      <p class="intro-sub">生日快乐 · 2006→2026</p>
+    </section>
+
+    <!-- ── 2 wishScene ──────────────────────────────────────── -->
+    <section id="scene-wish" class="scene off" aria-hidden="true">
+      <div class="wish-stage">
+        <div class="figures">
+          <div class="figure fig-girl" id="fig-girl">
+            <svg class="hat" viewBox="0 0 100 135" aria-hidden="true">
+              <defs><linearGradient id="h-girl" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#FFF6DD"></stop><stop offset="1" stop-color="#FE926D"></stop></linearGradient></defs>
+              <path d="M2 132 L50 14 L98 132 Z" fill="url(#h-girl)" stroke="#794D44" stroke-width="5" stroke-linejoin="round"></path>
+              <path d="M20 104 L44 40" stroke="#FFF6DD" stroke-width="7" opacity="0.75"></path>
+              <path d="M36 121 L62 55" stroke="#FFF6DD" stroke-width="7" opacity="0.6"></path>
+              <circle cx="50" cy="12" r="11" fill="#FEDF8D" stroke="#794D44" stroke-width="4"></circle>
+            </svg>
+            <img class="sprite open" src="assets/img/girl@4x.png?v=20261009al" alt="小服女生形象" draggable="false">
+          </div>
+          <svg class="cake-svg" viewBox="0 0 240 210" aria-hidden="true">
+          <defs>
+          <linearGradient id="c-candle" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#FEDF8D"></stop><stop offset="1" stop-color="#FE926D"></stop>
+          </linearGradient>
+          <radialGradient id="c-flame">
+          <stop offset="0" stop-color="#FFF9D8"></stop>
+          <stop offset="0.55" stop-color="#FFD75E"></stop>
+          <stop offset="1" stop-color="#FE926D" stop-opacity="0.15"></stop>
+          </radialGradient>
+          </defs>
+          <!-- glow behind the cake -->
+          <ellipse class="cake-glow" cx="120" cy="150" rx="118" ry="52" fill="#FFE9A6" opacity="0.5"></ellipse>
+          <!-- candles :: the "20" that runs through the whole show -->
+          <g class="candles">
+          <g class="candle">
+          <g class="flame"><ellipse cx="104" cy="26" rx="9" ry="14" fill="url(#c-flame)"></ellipse><ellipse cx="104" cy="29" rx="4" ry="8" fill="#FFF9D8"></ellipse></g>
+          <path d="M96 46 h16 v28 h-16 z" fill="url(#c-candle)" stroke="#794D44" stroke-width="2.4"></path>
+          <path d="M104 46 v28 M96 54 h16" stroke="#794D44" stroke-width="1.4" opacity="0.45"></path>
+          </g>
+          <g class="candle">
+          <g class="flame"><ellipse cx="136" cy="26" rx="9" ry="14" fill="url(#c-flame)"></ellipse><ellipse cx="136" cy="29" rx="4" ry="8" fill="#FFF9D8"></ellipse></g>
+          <path d="M128 46 h16 v28 h-16 z" fill="url(#c-candle)" stroke="#794D44" stroke-width="2.4"></path>
+          <path d="M136 46 v28 M128 54 h16" stroke="#794D44" stroke-width="1.4" opacity="0.45"></path>
+          </g>
+          </g>
+          <!-- upper tier -->
+          <path d="M66 74 h108 v30 h-108 z" fill="#FEDF8D" stroke="#794D44" stroke-width="3"></path>
+          <path d="M62 78 q10 -12 20 0 q10 -12 20 0 q10 -12 20 0 q10 -12 20 0 q10 -12 20 0 q10 -12 18 0 v10 h-118 z"
+          fill="#FFF6DD" stroke="#794D44" stroke-width="3"></path>
+          <circle cx="80" cy="92" r="3.4" fill="#FE926D"></circle><circle cx="120" cy="90" r="3.4" fill="#FE926D"></circle><circle cx="160" cy="92" r="3.4" fill="#FE926D"></circle>
+          <!-- lower tier -->
+          <path d="M48 104 h144 v74 q0 8 -8 8 h-128 q-8 0 -8 -8 z" fill="#FEDF8D" stroke="#794D44" stroke-width="3"></path>
+          <path d="M44 108 q11 -13 22 0 q11 -13 22 0 q11 -13 22 0 q11 -13 22 0 q11 -13 22 0 q11 -13 22 0 q11 -13 16 0 v12 h-148 z"
+          fill="#FFF6DD" stroke="#794D44" stroke-width="3"></path>
+          <circle cx="70" cy="126" r="4" fill="#FE926D"></circle><circle cx="106" cy="122" r="4" fill="#FE926D"></circle>
+          <circle cx="146" cy="126" r="4" fill="#FE926D"></circle><circle cx="176" cy="122" r="4" fill="#FE926D"></circle>
+          <path d="M76 150 q44 16 88 0" fill="none" stroke="#794D44" stroke-width="2" opacity="0.4"></path>
+          <ellipse cx="120" cy="186" rx="76" ry="7" fill="#794D44" opacity="0.12"></ellipse>
+          </svg>
+          <div class="figure fig-boy" id="fig-boy">
+            <svg class="hat" viewBox="0 0 100 135" aria-hidden="true">
+              <defs><linearGradient id="h-boy" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#FFF6DD"></stop><stop offset="1" stop-color="#FE926D"></stop></linearGradient></defs>
+              <path d="M2 132 L50 14 L98 132 Z" fill="url(#h-boy)" stroke="#794D44" stroke-width="5" stroke-linejoin="round"></path>
+              <path d="M20 104 L44 40" stroke="#FFF6DD" stroke-width="7" opacity="0.75"></path>
+              <path d="M36 121 L62 55" stroke="#FFF6DD" stroke-width="7" opacity="0.6"></path>
+              <circle cx="50" cy="12" r="11" fill="#FEDF8D" stroke="#794D44" stroke-width="4"></circle>
+            </svg>
+            <img class="sprite open" src="assets/img/boy@4x.png?v=20261009al" alt="小服男生形象" draggable="false">
+          </div>
+        </div>
+      </div>
+      <div class="warm-light" aria-hidden="true"></div>
+      <div class="hat-sparkles" id="hat-sparkles" aria-hidden="true"></div>
+    </section>
+
+    <!-- ── 3 compose ────────────────────────────────────────── -->
+    <section id="scene-compose" class="scene off" aria-hidden="true">
+      <div class="dialog" id="compose-dialog">
+        <p class="dialog-title">在下面写下你对小服的祝福吧</p>
+        <textarea id="compose-input" rows="4" enterkeyhint="send" placeholder="写点什么吧，小服在听…"></textarea>
+        <div class="dialog-meta">
+          <label class="name-row" for="compose-name">署名（选填）：
+            <input id="compose-name" type="text" autocomplete="off" placeholder="匿名">
+          </label>
+          <span id="compose-count" class="count">0/120</span>
+        </div>
+        <button id="compose-submit" class="btn-primary" type="button">送给小服</button>
+      </div>
+    </section>
+
+    <!-- ── 5 wall ───────────────────────────────────────────── -->
+    <section id="scene-wall" class="scene off" aria-hidden="true">
+      <header class="wall-head">
+        <img id="wall-emblem" class="emblem emblem-sm" src="assets/img/logo-96.png?v=20261009al" alt="会徽" draggable="false">
+        <h1 class="wall-title">小服的 20 岁祝福墙</h1>
+      </header>
+      <div id="wall-tracks">
+        <div class="track" data-track="0"></div>
+        <div class="track" data-track="1"></div>
+        <div class="track" data-track="2"></div>
+        <div class="track" data-track="3"></div>
+      </div>
+      <div class="wall-foot">
+        <button id="btn-write-more" class="btn-ghost" type="button">再写一条祝福</button>
+        <button id="btn-back-wish" class="btn-ghost" type="button">回到许愿场</button>
+      </div>
+      <div id="undo-bar" class="undo-bar off">
+        <span id="undo-text"></span>
+        <button id="btn-undo" class="btn-ghost" type="button"></button>
+      </div>
+      <div id="share-wrap" class="share-wrap off" hidden>
+        <div class="share-head">
+          <span>我的祝福卡</span>
+          <button id="share-close" class="share-close" type="button" aria-label="关闭">×</button>
+        </div>
+        <img id="share-img" alt="我的祝福卡">
+        <p id="share-hint" class="share-hint">长按图片保存到相册</p>
+      </div>
+    </section>
+  </div>
+
+  <div id="fx-layer" aria-hidden="true">
+    <div id="rise-trail" class="rise-trail"></div>
+    <div id="rise-note" class="rise-note"></div>
+  </div>
+
+  <canvas id="fx" aria-hidden="true"></canvas>
+
+  <div id="ui-top">
+    <button id="btn-skip" class="pill off" type="button">跳过</button>
+    <button id="btn-sound" class="icon-btn" type="button" aria-label="声音开关"><span class="sound-on">♪</span><span class="sound-off">♪̸</span></button>
+  </div>
+
+  <div id="wall-modal" class="modal off" role="dialog" aria-modal="true" aria-label="看看别人对小服的祝福吧">
+    <div class="modal-card">
+      <p class="modal-text">看看别人对小服的祝福吧</p>
+      <button id="btn-wall-go" class="btn-primary" type="button">看看</button>
+    </div>
+  </div>
+
+  <div id="pause-card" class="modal off" role="dialog" aria-modal="true" aria-label="祝福">
+    <div class="modal-card pause-card">
+      <p class="pause-name" id="pause-name"></p>
+      <p class="pause-time" id="pause-time"></p>
+      <p class="pause-text" id="pause-text"></p>
+      <div class="pause-actions">
+        <button id="btn-pause-delete" class="btn-ghost off" type="button">删除</button>
+        <button id="btn-pause-close" class="btn-ghost" type="button">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="admin-modal" class="modal off" role="dialog" aria-modal="true" aria-label="管理">
+    <div class="modal-card">
+      <p class="modal-text">管理</p>
+      <input id="admin-token" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="口令">
+      <div class="admin-actions">
+        <button id="btn-admin-ok" class="btn-primary" type="button">确定</button>
+        <button id="btn-admin-freeze" class="btn-ghost" type="button">冻结提交</button>
+        <button id="btn-admin-thaw" class="btn-ghost" type="button">恢复提交</button>
+      </div>
+      <p class="admin-msg" id="admin-msg"></p>
+      <button id="btn-admin-close" class="btn-ghost" type="button">关闭</button>
+    </div>
+  </div>
+
+  <div id="toast" class="toast off" role="status"></div>
+</div>
+
+<!-- confetti is a CommonJS bundle: it takes `module` as an argument, so as a classic script the
+     final line throws ReferenceError and nothing is ever exported. These three lines are the fix.
+     Order is a hard constraint (E40) and a CSP sha256 whitelists exactly these bodies (E4). -->
+<script>window.module = { exports: {} };</script>
+<script src="assets/vendor/confetti.js?v=20261009al"></script>
+<script>window.confetti = window.module.exports; delete window.module;</script>
+
+<script src="assets/js/sprites.js?v=20261009al"></script>
+<script src="assets/js/01-core.js?v=20261009al"></script>
+<script src="assets/js/02-ui.js?v=20261009al"></script>
+<script src="assets/js/03-store.js?v=20261009al"></script>
+<script src="assets/js/04-fx.js?v=20261009al"></script>
+<script src="assets/js/05-confetti.js?v=20261009al"></script>
+<script src="assets/js/06-audio.js?v=20261009al"></script>
+<script src="assets/js/07-share.js?v=20261009al"></script>
+<script src="assets/js/08-admin.js?v=20261009al"></script>
+<script src="assets/js/09-app.js?v=20261009al"></script>
+</body>
+</html>
